@@ -91,6 +91,7 @@ class Counters:
         self.eliminations = 0
         self.max_branching = 0
         self.max_labels_per_elim = 0
+        self.peak_state = 0
 
     def record(self, produced: int, labels: int) -> None:
         self.terms_in += 1
@@ -491,6 +492,8 @@ def eliminate_all(terms: Sequence[PairTerm], order: Sequence[int],
                 return None
             nxt.extend(got)
         state = nxt
+        if counters:
+            counters.peak_state = max(counters.peak_state, len(state))
         if term_cap is not None and len(state) > term_cap:
             return None
         if not state:

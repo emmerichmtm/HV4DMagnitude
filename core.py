@@ -120,7 +120,7 @@ class Step:
     the value on ``[xs[j], xs[j+1])``.
     """
 
-    __slots__ = ("xs", "vs")
+    __slots__ = ("xs", "vs", "_rev")
 
     def __init__(self, xs: Sequence[float], vs: Sequence[float]) -> None:
         if len(vs) != len(xs) + 1:
@@ -138,6 +138,10 @@ class Step:
                 cvs.append(v)
         self.xs = tuple(cxs)
         self.vs = tuple(cvs)
+        # Values reversed: nonincreasing vs becomes nondecreasing, so the
+        # generalized inverse is a bisect instead of a scan.  Built once here
+        # because a Step is immutable.
+        self._rev = tuple(reversed(self.vs))
 
     @staticmethod
     def const(value: float) -> "Step":

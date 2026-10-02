@@ -19,6 +19,7 @@ report's variant for comparison.
 from __future__ import annotations
 
 import math
+from bisect import bisect_left, bisect_right
 from typing import Callable, List, Sequence, Tuple
 
 from core import INF, Measure1D, Step
@@ -35,29 +36,23 @@ __all__ = [
 
 
 def prefix_bound_ge(f: Step, u: float) -> float:
-    """Exclusive ``theta`` with ``{x : f(x) >= u} == [0, theta)`` (f nonincreasing)."""
-    if f.vs[0] < u:
+    """Exclusive ``theta`` with ``{x : f(x) >= u} == [0, theta)`` (f nonincreasing).
+
+    ``f.vs`` is nonincreasing, so the values satisfying the predicate form a
+    prefix and their count is one binary search on the reversed array.
+    """
+    k = len(f.vs) - bisect_left(f._rev, u)       # count of values >= u
+    if k == 0:
         return 0.0
-    last = 0
-    for j, v in enumerate(f.vs):
-        if v >= u:
-            last = j
-        else:
-            break
-    return INF if last == len(f.vs) - 1 else f.xs[last]
+    return INF if k == len(f.vs) else f.xs[k - 1]
 
 
 def prefix_bound_gt(f: Step, u: float) -> float:
     """Exclusive ``theta`` with ``{x : f(x) > u} == [0, theta)`` (f nonincreasing)."""
-    if not (f.vs[0] > u):
+    k = len(f.vs) - bisect_right(f._rev, u)      # count of values > u
+    if k == 0:
         return 0.0
-    last = 0
-    for j, v in enumerate(f.vs):
-        if v > u:
-            last = j
-        else:
-            break
-    return INF if last == len(f.vs) - 1 else f.xs[last]
+    return INF if k == len(f.vs) else f.xs[k - 1]
 
 
 def prefix_mass(mu: Measure1D, theta: float, closed: bool) -> float:

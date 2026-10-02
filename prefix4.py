@@ -38,6 +38,7 @@ pointwise against a direct sweep rather than inferred.
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Sequence, Tuple
 
@@ -112,9 +113,30 @@ class Prefix4:
         ``X`` and ``Y`` are prefix masses; ``P(A) = int_{[0,A]} Y_open(f(x)) dmu1``
         and ``Q`` is the branch-2 correction.  All four are functions of a single
         argument -- this is exactly the content of the separability claim.
+
+        ``P`` is stored as an *interval record* exactly as the report specifies:
+        on each grid interval the integrand is constant, so the cumulative is
+        affine there and is recovered from its left-endpoint value plus the
+        measure of a subinterval.  Evaluation is then one predecessor search
+        rather than a fresh sweep, which is what makes a query cheap.
         """
         f = self.st.f12
         self._P_grid = sorted(set(self.g1) | set(f.xs))
+        # cumulative of Y_open(f12(x)) at each grid point, plus the local rate
+        self._P_x: List[float] = [0.0]
+        self._P_y: List[float] = [self.mu1.atom0 * self.mu2.prefix_open(f(0.0))]
+        self._P_rate: List[float] = []
+        running = self._P_y[0]
+        prev = 0.0
+        for pt in [g for g in self._P_grid if g > 0.0]:
+            rate = self.mu1.density * self.mu2.prefix_open(f((prev + pt) / 2.0))
+            self._P_rate.append(rate)
+            running += rate * (pt - prev)
+            self._P_x.append(pt)
+            self._P_y.append(running)
+            prev = pt
+        self._P_rate.append(
+            self.mu1.density * self.mu2.prefix_open(f(prev + 1.0)))
         self.counters["records"] += len(self._P_grid) + len(self.g2)
 
     def X(self, bound: Bound) -> float:
@@ -124,10 +146,22 @@ class Prefix4:
         return mass(self.mu2, bound)
 
     def P(self, bound: Bound) -> float:
-        """``int Y_open(f12(x)) dmu1`` over the prefix (unary in its argument)."""
+        """``int Y_open(f12(x)) dmu1`` over the prefix, from the stored record.
+
+        One predecessor search plus an affine step inside the interval.  The
+        open/closed flag only matters at 0, where the anchor atom lives.
+        """
         limit, closed = bound
-        return _cum(lambda x: self.mu2.prefix_open(self.st.f12(x)),
-                    self._P_grid, self.mu1, limit, closed=closed)
+        if limit < 0.0:
+            return 0.0
+        if limit == 0.0:
+            return self._P_y[0] if closed else 0.0
+        if limit == INF:
+            return INF if self._P_rate[-1] else self._P_y[-1]
+        i = bisect_right(self._P_x, limit) - 1
+        if i < 0:
+            return 0.0
+        return self._P_y[i] + self._P_rate[i] * (limit - self._P_x[i])
 
     def Q(self, bound_b: Bound) -> float:
         """Branch-2 correction ``X(tau)Y(B) - P(tau)``; unary in ``B``."""

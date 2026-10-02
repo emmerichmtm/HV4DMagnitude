@@ -541,7 +541,7 @@ The `2+2` prefix machinery does all of the easy-residual integration in
 
 Spherical fronts, 4-D, seconds:
 
-| `n` | prefix (this work) | Chan d/3 | Chan d/2 | dimension sweep | WFG |
+| `n` | prefix (this work) | FastHVChan d/3 | FastHVChan d/2 | dimension sweep | WFG |
 |---|---|---|---|---|---|
 | 10 | 0.196 | 0.014 | 0.0028 | 0.0005 | 0.0010 |
 | 20 | 0.527 | 0.059 | 0.0143 | 0.0030 | 0.0123 |
@@ -572,3 +572,47 @@ claim either. On grounded 4-D hypervolume the practical ranking remains what the
 FastHVChan benchmarks already showed: dimension sweep first, then WFG and
 Chan d/2, with the d/3 family well behind on constants despite the better
 exponent.
+
+
+### After optimising the prototype
+
+The first measurement was of an implementation that recomputed everything on
+every call, so it said little about the method. Two changes, both of which the
+report already specifies:
+
+* generalized inverses by binary search on the reversed value array instead of a
+  linear scan (they were 234,000 calls);
+* `P` stored as an **interval record** -- left-endpoint cumulative plus a local
+  rate, evaluated by one predecessor search -- instead of a fresh sweep.
+
+Both verified to produce identical results (28,000 inverse comparisons, and the
+whole suite still green). Seconds on spherical fronts:
+
+| `n` | prefix, optimised | prefix, before | FastHVChan d/3 | FastHVChan d/2 | dimension sweep |
+|---|---|---|---|---|---|
+| 10 | 0.110 | 0.196 | 0.016 | 0.0026 | 0.0005 |
+| 20 | 0.258 | 0.527 | 0.047 | 0.0083 | 0.0019 |
+| 40 | 1.400 | 3.338 | 0.149 | 0.0311 | 0.0132 |
+| 80 | 3.279 | 4.569 | 0.297 | 0.0569 | 0.0168 |
+
+About 2.4x faster, still ~9x behind FastHVChan's d/3 solver and ~45x behind its
+d/2 solver.
+
+**Where the rest of the gap is, and what the ceiling looks like.** The profile
+now puts the cost in the outer target integration: each prefix query sweeps
+about **39 target cells**, where the design calls for `O(1)` from precomputed
+records. That is the prototype's one remaining structural shortcut, and closing
+it needs the full record machinery of `symbolic.py` wired into the query path.
+
+It is worth being clear about the ceiling before anyone invests in that. Even a
+perfect `O(1)`-query implementation only removes the ~39x sweep factor, which
+would land the prefix solver roughly level with FastHVChan's d/3 solver -- and
+that solver is itself ~10x slower than d/2 and ~50x slower than the dimension
+sweep on this workload. Faster interpretation (numba, numpy vectorisation) would
+multiply a constant onto whichever version it is applied to and would not change
+that ordering.
+
+So the honest summary stands: the method is not shown to be slow, but no speed
+benefit exists or is claimed, and the realistic best case for this line of work
+on grounded 4-D hypervolume is parity with the existing d/3 implementation, not
+with the practical algorithms.

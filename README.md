@@ -1,0 +1,81 @@
+# HV4DMagnitude
+
+An adversarial validation of the product-measure / magnitude simplification of
+Chan's four-dimensional hypervolume algorithm, following the task specification
+in `CODEX_CLAUDE_MAGNITUDE_CHAN_PROMPT_REVISED.md`.
+
+The purpose of this folder is **to try to break the proposed lemmas**, not to
+ship a fast solver. Every identity is implemented independently of an exact
+brute-force oracle and checked against it, including the degenerate cases the
+report flags as dangerous: plateaus, queries exactly at breakpoints, empty
+feasible intervals, and the magnitude atom at the anchor 0.
+
+**Read [`notes/audit.md`](notes/audit.md) first** — it states what was verified,
+what needs correcting in the report, and, most importantly, what is *not*
+verified.
+
+## Result in one paragraph
+
+No counterexample to any stated lemma survived. The core claim — that the target
+plane splits into a constant number of fixed regions on each of which the source
+mass is separable — held across 11,250 pointwise checks, and the assembled
+four-prefix integral matched exact 4-D enumeration under both measures. Three
+items need sharpening in the write-up (a strict-inequality convention, the
+`sup ∅` encoding, and the measurability hypothesis in the tower argument), and
+one substantial claim remains untested: whether the primitive count stays
+bounded across *repeated* compressions. That last one is where the complexity
+argument actually lives.
+
+## Running
+
+```bash
+python run_all_tests.py
+```
+
+No dependencies beyond the standard library. The FastHVChan cross-check imports
+`C:\MyTemp\code\FastHVChan` and is skipped if that is not present.
+
+## Layout
+
+```
+core.py          measures, right-continuous step functions, generalized
+                 inverses, and the exact grid oracle
+identities.py    the three identities: threshold antiderivative, two-branch
+                 staircase prefix, meet contraction
+prefix4.py       the six-staircase model and the four-prefix normal form,
+                 with region labelling and instrumentation
+tests/           one file per phase group of the validation plan
+notes/audit.md   the audit
+```
+
+## Conventions
+
+These are stated in full at the top of `core.py` and are the whole ballgame for
+the magnitude measure; the short form:
+
+* coordinates live on `[0, ∞)` and are never translated — the anchor 0 carries
+  an atom under magnitude, so a shifted cell is a different problem;
+* measures are `atom0·δ₀ + density·λ`; Lebesgue is `(0, 1)`, magnitude is
+  `(1, ½)`;
+* step functions are **right-continuous**, which the geometry forces: the
+  staircase bounding a union of grounded quadrants drops exactly at a vertex;
+* staircase constraints are **strict** (`x_j < f(x_i)`), which is what the
+  geometry gives and which differs from the report's `≤` under magnitude;
+* generalized inverses return **exclusive** bounds, so `θ = 0` means the empty
+  set and not `{0}`.
+
+## Status against the task's acceptance criteria
+
+| Criterion | Status |
+|---|---|
+| Threshold-antiderivative tests pass, both measures, ties and anchor | ✅ 720 cases |
+| Four-prefix queries agree with small-grid enumeration | ✅ 144 queries |
+| Compression agrees after absorb + coarsen | ✅ 192 cells, 1 generation |
+| Closure over *multiple* generations | ❌ not implemented — see the audit |
+| Compressed state is `O(m)` with no Cartesian blowup | ◻ region count bounded (14 ≤ 18); record scaling not measured |
+| End-to-end `prefix4` agrees with the legacy backend | ◻ partial: the model agrees with FastHVChan on purely two-sided instances (40 cases); the compressor is not wired into the recursion |
+| Cutting recursion unchanged | ✅ untouched — nothing in `FastHVChan` was modified |
+| Documented `Õ(n^{4/3})` overall bound | ❌ not tested here |
+
+`FastHVChan` is used read-only as an independent oracle. Nothing in it was
+changed.

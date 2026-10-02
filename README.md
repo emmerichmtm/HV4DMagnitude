@@ -10,6 +10,9 @@ brute-force oracle and checked against it, including the degenerate cases the
 report flags as dangerous: plateaus, queries exactly at breakpoints, empty
 feasible intervals, and the magnitude atom at the anchor 0.
 
+The report under audit is in [`paper/`](paper/). Its revised version proves the
+step that was open and adopts all four findings into the formal statement.
+
 **Read [`notes/audit.md`](notes/audit.md) first** — it states what was verified,
 what needs correcting in the report, and, most importantly, what is *not*
 verified.
@@ -54,6 +57,7 @@ closure_probe.py measures whether the blow-up factor grows with the instance
 generations.py   multi-generation compress/absorb, verified against fine geometry
 tests/           one file per phase group of the validation plan
 notes/audit.md   the audit
+paper/           the report under audit (revised; the open lemma is proven)
 ```
 
 ## Conventions

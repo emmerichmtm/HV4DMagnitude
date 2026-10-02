@@ -1,7 +1,13 @@
 # Audit of the product-measure / magnitude simplification of Chan's 4-D algorithm
 
 Report audited: *A Product-Measure and Magnitude Simplification of Chan's
-Four-Dimensional Hypervolume Algorithm* (2 October 2026).
+Four-Dimensional Hypervolume Algorithm*.
+
+**Status update.** A revised version of the report
+(`paper/magnitude_chan4_report_closed.tex`) now closes the open point and
+incorporates every finding below. The audit text is kept as written, with the
+resolution recorded at the end, so the trail from finding to fix stays
+readable.
 
 Everything below was obtained by executing the claims against exact oracles, in
 the order the accompanying task specification prescribes. Each identity was
@@ -376,3 +382,59 @@ stays bounded across compression generations — and it is testable. Until it is
 tested, the honest status is: the normal form is verified, the semantics of
 compression are verified, and the recursion-level complexity argument rests on a
 constant that has not yet been measured.
+
+
+---
+
+## Resolution in the revised report
+
+The revised report adopts all four findings into the formal statement rather
+than into footnotes, and supplies a proof of the step that was open.
+
+| Finding | Where it now lives |
+|---|---|
+| 1. Strict residual inequality | the residual is now `∏ [x_j < f_ij(x_i)]`, and the staircase prefix formula is stated for the strict residual |
+| 2. `sup ∅` must not be the number 0 | the endpoint convention now mandates *decorated interval bounds* — EMPTY/FULL sentinels plus an open/closed flag — and says explicitly that an empty prefix is never encoded by the endpoint 0 |
+| 3. Measurability is load-bearing | formalised as a **future-complete** grid: every threshold that can become a descendant mask, including cut coordinates and inherited cell boundaries, must be grid-measurable |
+| 4. Monotone images are new values | stated directly — the images "can be new numerical values" — with the `O(m)` bound re-derived on that basis |
+
+**The open point is closed.** The parametric re-expression lemma now carries an
+explicit constructor: after an incoming primitive is multiplied by newly easy
+masks and integrated, every residual comparison is routed by variable type into
+one of four fixed destinations — a physical staircase, a latent `u` cap, a
+latent `v` cap, or a one-turn latent boundary — with a crude but dimension-only
+bound `C₄ ≤ 16 R₀ K₀⁸ 2^{L₀}`.
+
+Two things about that proof are worth recording from an auditor's seat.
+
+First, it is careful in exactly the place my measurements were ambiguous. It
+separates *primitive count* from *breakpoint count*: a same-variable comparison
+may alternate arbitrarily often and is stored as one unary step filter rather
+than split into primitives. That is precisely why the primitive count cannot
+depend on staircase complexity — and it matches what I measured, where the raw
+primitive count stayed flat at 196 while breakpoint complexity grew with the
+instance.
+
+Second, the complexity claim is now weaker and more defensible than the earlier
+draft's. It no longer asserts that the primitive count returns to a constant
+after each compression; it asserts only `S' ≤ C₄ S`, and then handles the
+accumulation by schedule — `O(1)` generations under a fixed block parameter, or
+`O(log log n)` generations and hence `(log n)^{O(1)}` primitives under a locally
+recomputed `r_j = N_j^δ`. Both are absorbed by `Õ`, and the report says outright
+that no canonical recombination theorem is claimed. That is the right call:
+those two situations are not distinguishable by the experiments here.
+
+**What my experiments do and do not say about the new proof.** They are
+consistent with it, and are cited as such, but they are not a check of it. I
+measured the composition's region labels and separability — the mechanism the
+constructor formalises — and multi-generation compression through cell
+averages. I did not implement the constructor, so `C₄` itself remains
+unmeasured: the 196 figure is the generation-0 count from `symbolic.py`, not
+`S₁/S₀`.
+
+**What this unblocks.** The appendix gives the recipe for the composed
+constructor whose absence blocked Phase 9, as a normalization table from
+comparison type to destination. The remaining engineering is now specified
+rather than open. The empirical caveat from the previous section still stands:
+compression does not fire on grounded 4-D workloads, so an end-to-end A/B would
+measure a path that does not execute unless compression is forced on.

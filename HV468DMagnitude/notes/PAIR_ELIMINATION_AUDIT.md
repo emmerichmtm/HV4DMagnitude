@@ -2,107 +2,96 @@
 
 Report audited: *A Product-Measure and Magnitude Simplification of Chan's
 Hypervolume Algorithm* — generalized version with Section "General
-fixed-dimensional pair elimination" (`paper/magnitude_chan_pair_elimination_report.tex`).
+fixed-dimensional pair elimination"
+(`paper/magnitude_chan_pair_elimination_report.tex`).
 
-**Status: mathematically plausible but implementation-incomplete.**
+**Status: no counterexample found; the elimination calculus is implemented and
+exact at `p = 2,3,4,5,6,8` under both measures, with four blocking defects in
+the written statements repaired along the way.**
 
-That is the prompt's middle category, and it is chosen deliberately. No
-counterexample was found. Everything the constructor covers is exact, under both
-measures. But the constructor's coverage falls off sharply with dimension, and
-at `p = 6` it covered nothing, so the general-dimensional claim — the entire
-point of the generalization — is **not yet tested**. The 4-D base case remains
-verified from the previous sprint.
-
----
-
-## What was tested, and what it says
-
-Elimination was checked against exact product-grid enumeration (anchor atom as
-its own cell, so magnitude is exact, not approximated):
-
-| `p` | instances completed | max branching per elimination | exactness |
-|---|---|---|---|
-| 2 | 30/30 | 2 | exact |
-| 3 | 18/30 | 5 | exact |
-| 4 | 11/30 | 9 | exact |
-| 5 | 1/6 | 2 | exact |
-| 6 | **0/6** | — | **untested** |
-
-"Branching" is the number of terms one elimination produces from one incoming
-term — the quantity the lemma actually bounds. A cumulative count would
-conflate it with chain depth, which is how the first version of this
-instrumentation misled me.
-
-Where the constructor completed, the result matched the oracle every time, for
-Lebesgue and for magnitude. That is real but narrow evidence.
+The full itemized list of problems with the report, with severities, is in
+[`REPORT_PROBLEMS.md`](REPORT_PROBLEMS.md). The measured growth tables are in
+[`../PAIR_ELIMINATION_COMPLEXITY.md`](../PAIR_ELIMINATION_COMPLEXITY.md). This
+file records what was tested and the findings in the order they were found.
 
 ---
 
-## Finding 1 — the term class is not closed, and the abstentions prove it
+## What was tested
 
-Definition 1 requires every `f_e` to be a **monotone** step map, and justifies
-"at most one lower and one upper predicate per pair" by saying same-orientation
-predicates merge via min/max.
+Elimination checked against exact product-grid enumeration, anchor atom as its
+own cell so magnitude is exact rather than approximated. Equal instance counts
+under Lebesgue and under magnitude.
 
-That merge is only available when the orientations agree. Elimination routinely
-produces, for one pair, an upper predicate from a nondecreasing map *and* one
-from a nonincreasing map. Their conjunction is
+| `p` | instances | exact | abstentions | max branching |
+|---|---|---|---|---|
+| 2 | 30 | yes | 0 | 2 |
+| 3 | 30 | yes | 0 | 3 |
+| 4 | 30 | yes | 0 | 6 |
+| 5 | 12 | yes | 0 | 4 |
+| 6 | 12 | yes | 0 | 14 |
+| 8 | 8 | yes | 0 | 3 |
+
+This covers the static prefix chain for `d = 4, 6, 8`. It does **not** cover
+compression, which needs `p = 2d` and is therefore reached only at `d = 4`.
+
+An earlier version of this table read 30/30, 18/30, 11/30, 1/6, **0/6** with 42
+abstentions. The difference is Findings 1–3 below.
+
+---
+
+## Finding 1 — the term class is not closed, and the abstentions proved it
+
+Definition 1 requires every `f_e` to be **monotone** and justifies "at most one
+lower and one upper predicate per pair" by saying same-orientation predicates
+merge via min/max. That merge exists only when the orientations agree.
+Elimination routinely produces, for one pair, an upper predicate from a
+nondecreasing map *and* one from a nonincreasing map, and their conjunction
 
 ```
 xi_j  <|  min( h_up(xi_i), h_down(xi_i) )
 ```
 
-which has a turning point and is **not monotone**. The class as defined does not
-contain it.
+has a turning point. The class as defined does not contain it.
 
-This is not speculation about the proof. The implementation abstains exactly
-when it meets such a predicate, and the abstention rate is the table above:
-0% at `p = 2`, 40% at `p = 3`, 63% at `p = 4`, 83% at `p = 5`, 100% at `p = 6`.
-The failure mode grows with dimension precisely because more eliminations mean
-more chances for two opposite orientations to land on the same pair.
+The abstention rate was the proof: 0% at `p = 2`, 40% at `p = 3`, 63% at
+`p = 4`, 83% at `p = 5`, 100% at `p = 6` — growing with dimension precisely
+because more eliminations mean more chances for two opposite orientations to
+land on the same pair.
 
-**This is a repair, not a refutation.** The 4-D treatment already contains the
-fix: its "latent one-turn normal form" is exactly `min(h_up, h_down)`. Two ways
-to close the general definition:
+**Repaired, two ways at once.** A pair now carries a *list* of predicates
+(`pair_state.merge_same_orientation` merges only within an orientation), and
+one-turn boundaries are admitted, mirroring the 4-D "latent one-turn normal
+form". Abstentions went to zero through `p = 8`.
 
-1. allow one-turn boundaries in the class, as 4-D does; or
-2. keep a *list* of predicates per pair rather than one per side.
+The invariant was load-bearing, which is the part worth emphasizing in the
+paper: the `O(p)` candidate count in Lemma 2's proof *is* "one lower and one
+upper per incident pair". With a list it becomes `O_p(1)` with a worse constant
+— still fine for fixed `p`, but not what the proof says.
 
-Either keeps the count bounded for fixed `p` — each elimination adds only
-`O_p(1)` predicates — so no asymptotic claim changes. But Definition 1 as
-written is too tight, and the proof's step "each labelled region is itself a
-weighted monotone-pair term" does not follow from it.
+## Finding 2 — inversion is interval-valued, not one-sided
 
-The implementation takes route 2 (`pair_state.merge_same_orientation` merges
-only within an orientation and keeps the rest). Route 1 is what is needed to
-close the remaining abstentions, and is the next piece of work.
+Lemma 2's proof says each incident constraint becomes "a lower **or** upper
+interval bound". That disjunction is not exhaustive. Even for monotone `f` the
+degenerate pieces — all `x` feasible, none feasible — belong to the opposite
+family, so forcing one side per predicate misrepresents the rest; and once
+one-turn maps are admitted, a hill's superlevel set is a genuine middle interval.
 
-## Finding 2 — the separable split needs the staircase clamped
+**Repaired.** `_invert_to_bounds` returns a decorated interval: a lower *and* an
+upper candidate plus a `0/1` feasibility weight for the empty pieces. The side
+condition the construction actually needs is that the feasible set be an
+**interval**, tested by contiguity of the feasible run — not by orientation.
+This single change took `p = 6` from 0% coverage to 100%.
 
-Carried over from the 4-D audit and unchanged by the generalization. Branch 2 of
-the staircase prefix formula is split as `P(A) + Q(B)` precisely to make the two
-factors separable, but
-
-```
-P(A) = ∫ Y(f(x)) dμ
-```
-
-diverges when `f ≡ +∞`, which is what a pair carrying no constraint looks like.
-The split then evaluates as `∞ − ∞` while the quantity it represents is finite.
-
-In the general setting the repair is available and exact: in the compression
-integrand every `x_i` is confined to a grid interval, so a vacuous constraint
-*is* the cell ceiling and `f_e` can be clamped to it. This must be stated as
-part of the normalization, not left to the implementer — the 4-D solver
-returned `NaN` on real instances before it was added.
+The remaining gap is the *valley*: `max(h_up, h_down)` on the lower side leaves
+two disjoint runs, which is not an interval. The constructor abstains there.
+That is the coverage ceiling from `p = 9` upward.
 
 ## Finding 3 — the decorated lower bound inverts in the cumulative difference
 
-Found by implementing, and the single genuine bug of this sprint. The mass of a
-feasible interval is
+The single genuine bug of the first pass. The mass of a feasible interval is
 
 ```
-Q(U) − Q(L⁻)
+Q(U) - Q(L^-)
 ```
 
 so on the **lower** side the endpoint flag must be *inverted*: if `L` is
@@ -110,23 +99,72 @@ attained, what gets subtracted is the mass strictly below it; if `L` is
 excluded, the mass up to and including it. Using the flag directly deletes the
 anchor atom whenever `L = 0`.
 
-Under Lebesgue this is invisible — every test passed. Under magnitude it is a
-mass-1 error, and it broke every magnitude instance from `p = 2` upward. This is
-now the fourth distinct endpoint bug across the two sprints that Lebesgue hid
-and magnitude exposed, which is the strongest practical argument for keeping the
-magnitude oracle in the test suite.
+Invisible under Lebesgue — every test passed. Under magnitude it is a mass-1
+error that broke every instance from `p = 2` upward.
+
+## Finding 4 — the label partition double-counts ties
+
+"Partition by which lower endpoint is maximal and which upper is minimal" is not
+a partition. When two candidates coincide on a region of positive measure both
+labels hold and the region is integrated twice — and ties are the common case,
+not an edge case, because distinct predicates routinely invert to the same
+domain limit.
+
+**Repaired** by first-winner tie-breaking: the candidate at index `k` compares
+strictly against earlier candidates and non-strictly against later ones. Before
+this, integrals came out exactly 2x and 4x too large.
+
+## Finding 5 — abstention has to be total, or it becomes an overcount
+
+`_impose` previously returned "imposed" when the comparison could not be
+expressed, which **deletes a constraint** and inflates the integral. Dropping a
+constraint is not a conservative approximation; it is a wrong answer that looks
+like a passing test until the class is wide enough to reach it. Latent while
+only monotone predicates existed, dominant the moment one-turn predicates were
+admitted — every resulting failure had `got > want`.
+
+`_impose` is now tri-state (imposed / identically false / abstain) and the
+abstention propagates out of `eliminate_variable`.
+
+## Finding 6 — NaN is not annihilated by multiplying with zero
+
+An inverted bound carries `+inf` where its predicate constrains nothing, and the
+cumulative of an unbounded endpoint integrates `density * (inf - g) *
+weight(inf)`: `inf`, or `0 * inf = NaN`. The label indicators already exclude
+those pieces, but zero times NaN is NaN, so the whole signed sum is poisoned.
+
+**Repaired** by clamping endpoints to the ground set's ceiling at the measure
+step — exact, because `x` is confined to `[lo, hi]`, so "unconstrained above"
+*is* `hi`. The clamp must not be applied to the candidate before the label
+comparisons, where `+inf` correctly means "weaker than every other bound"; the
+stronger clamp was tried and broke `p = 4` and `p = 5`.
+
+This one hid behind a test defect: `abs(got - want) > tol` is `False` when `got`
+is NaN, so **every NaN silently passed** and one full cycle reported "no
+mismatches" while returning NaN throughout. The suite now rejects NaN
+explicitly. Any audit of this report should assert non-NaN separately.
+
+Removing the NaNs also cut branching sharply — `p = 4`: 21 → 6, `p = 6`: 50 → 14
+— because NaN weights were never recognized as dead terms.
+
+## Finding 7 — the oracle has to be grid-aligned in values, not just breakpoints
+
+Not a report defect; a methodology note that cost real time twice across the two
+sprints. The oracle evaluates one representative per cell, which is exact only
+if every function in the term is constant on each cell. So a generated staircase
+must put **both its breakpoints and its values** on the grid the cells are cut
+from: a value off the grid becomes a region boundary *inside* a cell, and the
+oracle silently returns the wrong number. Mixing fine staircases with the coarse
+`p = 8` grid produced four failures that looked like constructor bugs.
 
 ## Observation — Lemma 3 follows from Lemma 2
 
-The report proves one-variable elimination (Lemma 2) and pair elimination
-(Lemma 3) separately. For *closure* purposes Lemma 3 is not needed: from `x`'s
-point of view the mutual `x`–`y` staircase is just one more bound candidate that
-happens to depend on `y`, so applying Lemma 2 twice already gives the pair
-result. The implementation does exactly this and is exact wherever it applies.
-
-Lemma 3 buys a better constant and a closed form (the two-branch formula), not
-extra generality. Worth saying in the paper, because it makes the general
-argument rest on the simpler of the two lemmas.
+For closure purposes Lemma 3 is not needed: from `x`'s point of view the mutual
+`x`–`y` staircase is just one more bound candidate that happens to depend on
+`y`, so two applications of Lemma 2 already give the pair result. The
+implementation does exactly this and is exact wherever it applies. Lemma 3 buys
+a better constant and a closed form, not extra generality — worth saying,
+because it makes the general argument rest on the simpler lemma.
 
 ---
 
@@ -134,27 +172,31 @@ argument rest on the simpler of the two lemmas.
 
 | # | obligation | status |
 |---|---|---|
-| 1 | finite active-bound candidate count | holds: domain bound plus one per incident predicate, `O(p)` per side |
-| 2 | finite label count | holds: product of the two candidate sets, `O(p²)`; measured max 9 at `p=4` |
-| 3 | separable branch formulas | verified wherever the constructor applies, both measures |
-| 4 | closure of branch conditions | **fails as stated** — see Finding 1 |
-| 5 | complement handling | not reached; blocked behind Finding 1 |
-| 6 | breakpoint complexity vs primitive count | partially: branching stayed at 2, 2, 5 while term breakpoints went 2, 6, 9, but the sample is small and biased toward completed cases |
-| 7 | no hidden instance-size dependence in `B_p` | consistent with the data, not established — the coverage is too thin to claim it |
+| 1 | finite active-bound candidate count | holds: domain bound plus up to two per incident predicate, `O_p(1)` per side |
+| 2 | finite label count | holds: product of the two candidate sets; measured max branching 2–14 for `p <= 8` |
+| 3 | separable branch formulas | verified at `p = 2..8`, both measures, zero abstentions |
+| 4 | closure of branch conditions | **fails as written** (Finding 1), repaired by admitting one-turn boundaries |
+| 5 | complement handling | partial: hills handled, valleys abstain — the `p >= 9` ceiling |
+| 6 | breakpoint complexity vs primitive count | holds: breakpoints per term *decrease* along the chain (`p=8`: 22 → 20.5 → 20.2 → 15.6 → 12.4 → 6.5 → 1 → 0) |
+| 7 | no hidden instance-size dependence in `B_p` | holds at `p = 4` (9x breakpoints, branching saturates at 9–10); consistent but not established at `p = 6`, where the mean still creeps |
 
 ---
 
-## What would close this
+## What would close the rest
 
-1. Extend the predicate class to one-turn boundaries (`min(h_up, h_down)`),
-   mirroring the 4-D normal form. This should remove most abstentions and is
-   the prerequisite for everything below.
-2. Re-run `p = 6` and `p = 8` with the extended class, on tiny grids, against
-   exact enumeration.
-3. Only then measure `B_p` against growing `N` and claim independence.
-4. Phase 5 (compression in `2d` variables) and Phase 6 (FastHVChan backend
-   behind a flag) have not been started.
+1. Handle the valley case by splitting a two-run feasible set into two signed
+   terms. Routine; not implemented. This is the `p >= 9` ceiling.
+2. Phase 5: compression in the `2d` variables of the general compression
+   integrand, which is what `d = 6` and `d = 8` actually need (`p = 12`, `16`).
+3. Phase 6: FastHVChan backend behind a `compression_backend` flag.
+4. Multi-generation closure above `d = 4`.
 
-Until step 2 produces exact agreement at `p = 6`, the honest statement is that
-the generalization is plausible and partially implemented, and that its 4-D
-specialization is the only dimension verified end to end.
+Until 2 lands, the honest statement is: **the elimination calculus is validated
+to `p = 8`, which covers the static chain for `d <= 8`; the compression that
+uses it is validated only at `d = 4`.**
+
+Of the six genuine bugs across the two sprints, **four were invisible under
+Lebesgue and exposed only by magnitude** — all four endpoint or atom errors at
+`0`. That is the strongest practical argument for keeping the magnitude oracle
+in the suite, and an argument for the product-measure framing independent of the
+complexity result.

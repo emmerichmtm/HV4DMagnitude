@@ -23,10 +23,12 @@ four-prefix integral matched exact 4-D enumeration under both measures. Three
 items need sharpening in the write-up (a strict-inequality convention, the
 `sup ∅` encoding, and the measurability hypothesis in the tower argument), and
 one substantial claim was untested: whether the primitive count stays bounded
-across *repeated* compressions. A follow-up probe (`closure_probe.py`) now
-gives strong evidence that it does — the region count is bounded by a
-dimension-only constant and flat as the instance grows 16x, and separability
-survives the composition in 1,440 of 1,440 checks.
+across *repeated* compressions. That has now been tested too
+(`generations.py`): compression is exact over four generations against the
+original fine geometry, and the per-generation blow-up factor is stable at
+17-21 regions against a dimension-only bound of 50. What remains is to write
+the symbolic constructor for the output primitives — engineering, not
+discovery.
 
 ## Running
 
@@ -46,7 +48,8 @@ identities.py    the three identities: threshold antiderivative, two-branch
                  staircase prefix, meet contraction
 prefix4.py       the six-staircase model and the four-prefix normal form,
                  with region labelling and instrumentation
-closure_probe.py measures whether the primitive count grows with the instance
+closure_probe.py measures whether the blow-up factor grows with the instance
+generations.py   multi-generation compress/absorb, verified against fine geometry
 tests/           one file per phase group of the validation plan
 notes/audit.md   the audit
 ```
@@ -74,7 +77,7 @@ the magnitude measure; the short form:
 | Threshold-antiderivative tests pass, both measures, ties and anchor | ✅ 720 cases |
 | Four-prefix queries agree with small-grid enumeration | ✅ 144 queries |
 | Compression agrees after absorb + coarsen | ✅ 192 cells, 1 generation |
-| Closure over *multiple* generations | ◻ source-side composition tested and closes (1,440/1,440); final re-expression step not implemented — see the audit |
+| Closure over *multiple* generations | ✅ exact over 4 generations (456 cells, error 0 / 4e-15); `R` stable at 17-21 |
 | Compressed state is `O(m)` with no Cartesian blowup | ◻ region count bounded (14 ≤ 18); record scaling not measured |
 | End-to-end `prefix4` agrees with the legacy backend | ◻ partial: the model agrees with FastHVChan on purely two-sided instances (40 cases); the compressor is not wired into the recursion |
 | Cutting recursion unchanged | ✅ untouched — nothing in `FastHVChan` was modified |

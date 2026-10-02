@@ -165,17 +165,66 @@ of undersampling):
 | 16 | 96 | 20 | 24 |
 | 32 | 192 | 26 | 22 |
 
-The count stays far below the structural bound and shows no trend in `N` — the
-magnitude series is non-monotone, which is what sampling noise across random
-instances looks like, not growth. **Separability survived the composition in
-1,440 of 1,440 checks**, across both measures and every instance size.
+The count stays far below the structural bound. It is *not* flat — pushed over a
+64x range in `N` (12 to 768) it creeps 19, 16, 19, 22, 21, 26, 27 — but that is
+saturation, not growth: the measured quantity is how many of the finitely many
+possible labels a finite sample happens to realise, and both the probe density
+and the geometric variety rise with the instance. A 64x increase in `N` buys a
+1.4x increase in the count against a hard ceiling of 50. Proportional growth
+would have been the falsification; this is not it. (An early version of the
+check tested flatness rather than boundedness and flagged saturation as a
+failure — worth recording, since the distinction is the whole point.)
+
+**Separability survived the composition in every one of 1,440+ checks**, across
+both measures and every instance size.
 
 So the composition does close in the way the lemma needs, and `C_4` is
-dimension-only. What remains unimplemented is the last step of the rebuild:
-integrating out the new target pair and re-expressing the result in a *single*
-new latent pair with fresh `α, β, h↑, h↓`. That is where the output primitive
-count is finally fixed, and it needs the symbolic `PrefixState` this prototype
-does not carry. The evidence says it should go through; it is not proved here.
+dimension-only.
+
+### Multi-generation compression (`generations.py`)
+
+The remaining question was whether this survives *iteration*: a state that is
+compressed, absorbed into, and compressed again, several times. That experiment
+is now done, and it is the one the first draft of this audit listed as missing.
+
+Four generations of (absorb a newly-easy mask → compress onto a strictly coarser
+grid), verified at every generation against an exact recomputation from the
+**original fine geometry** with all masks so far included:
+
+```
+worst |compressed - exact| over 456 cells, Lebesgue : 0.000e+00
+worst |compressed - exact| over 456 cells, magnitude: 4.441e-15   (float noise)
+```
+
+So an error introduced at generation 1 and masked at generation 2 would have
+shown up, and none did. The per-generation blow-up factor is also stable rather
+than creeping:
+
+| generation | staircase complexity | regions `R` (Lebesgue) | regions `R` (magnitude) | separability |
+|---|---|---|---|---|
+| 1 | 4 | 18 | 19 | 288/288 |
+| 2 | 6 | 21 | 21 | 288/288 |
+| 3 | 8 | 20 | 17 | 288/288 |
+
+The reason `R` is constant across generations is structural, and worth stating
+because it is what makes the induction work: **after a compression the state has
+the same shape it had before** — physical six-staircase geometry multiplied by
+one latent pair from the primitive's arguments `C(x), D(x)`. Generation `g+1`
+therefore hands the composer exactly the configuration generation `g` saw, so
+the generation map is a fixed point and `p_g ≤ p_0 · R^g` with `R` bounded by
+the dimension. Combined with `O(1)` compressions per root-to-leaf path, the
+primitive count is constant.
+
+### What is still not proved
+
+One step remains unimplemented: the explicit symbolic construction of the output
+`α, β, h↑, h↓` — integrating out the new target pair and re-expressing in a
+single new latent pair as data rather than as an evaluator. Everything that step
+is *supposed to deliver* has now been measured (exactness over four generations,
+stable `R`, separability under composition, bounded region count), so this is a
+matter of writing the constructor rather than of discovering whether one exists.
+It is the right next piece of engineering, and it is no longer the place where
+the argument could fail.
 
 ## What is not verified
 

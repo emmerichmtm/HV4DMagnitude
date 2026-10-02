@@ -299,7 +299,7 @@ def eliminate_variable(term: PairTerm, x: int, mu: Measure1D,
                 return None                    # abstention propagates outward
             if not ok:
                 continue
-            if not _absorb_cumulative(piece, cand, Q):
+            if not _absorb_cumulative(piece, cand, Q, hi):
                 continue
             piece.preds = merge_same_orientation(piece.preds)
             if not piece.is_dead():
@@ -427,7 +427,7 @@ def _comparison_predicate(piece: PairTerm, a: Candidate, b: Candidate,
     return True
 
 
-def _absorb_cumulative(piece: PairTerm, cand: Candidate, Q) -> bool:
+def _absorb_cumulative(piece: PairTerm, cand: Candidate, Q, hi: float) -> bool:
     """Multiply in the cumulative evaluated at this candidate.
 
     The mass of the feasible interval is ``Q(U) - Q(L^-)``.  So the endpoint
@@ -436,13 +436,29 @@ def _absorb_cumulative(piece: PairTerm, cand: Candidate, Q) -> bool:
     mass up to and including it.  Under Lebesgue this makes no difference; under
     the magnitude measure at ``L = 0`` it decides whether the anchor atom is
     kept or deleted, and getting it backwards silently loses mass 1.
+
+    Endpoints are clamped to the ground set's ceiling ``hi`` before the measure
+    is taken.  An inverted bound carries ``+inf`` on the pieces where its
+    predicate constrains nothing, and the cumulative of an unbounded endpoint
+    diverges: ``_cum`` integrates ``density * (inf - g) * weight(inf)``, which
+    is ``inf`` when that last value is positive and ``0 * inf = NaN`` when it is
+    zero.  Those pieces are already excluded by the label indicators, but a NaN
+    is not annihilated by multiplying with zero, so it has to be prevented
+    rather than cancelled.  Clamping is exact here because ``x`` is confined to
+    ``[lo, hi]``: "unconstrained above" *is* ``hi``.
+
+    This clamp is at the measure step only.  Clamping the candidate itself,
+    before the label comparisons, is wrong -- there ``+inf`` correctly means
+    "weaker than every other bound", and collapsing it onto ``hi`` makes a
+    vacuous bound tie with the ground set and claim regions it does not own.
+    An earlier attempt clamped both sides everywhere and broke p=4 and p=5.
     """
     closed = cand.closed if cand.upper else (not cand.closed)
     if cand.var is None:
-        piece.coeff *= Q(cand.f(0.0), closed)
+        piece.coeff *= Q(min(cand.f(0.0), hi), closed)
         return piece.coeff != 0.0
     xs = cand.f.xs
-    vs = tuple(Q(v, closed) for v in cand.f.vs)
+    vs = tuple(Q(min(v, hi), closed) for v in cand.f.vs)
     piece.mul_weight(cand.var, Step(xs, vs))
     return True
 

@@ -14,6 +14,7 @@ SUITES = [
     ("Phases 5-6  four-prefix normal form", "tests/test_prefix4.py"),
     ("Phase 6e-f  normal form as data", "tests/test_symbolic.py"),
     ("Phases 8,10 closure and magnitude oracle", "tests/test_closure.py"),
+    ("Phase 7     vs legacy compress_terms", "tests/test_vs_legacy_compressor.py"),
     ("Phase 9     cross-check vs FastHVChan", "tests/test_against_fasthvchan.py"),
     ("Phase 8+    multi-generation compression", "generations.py"),
     ("Phase 11    blow-up factor vs instance size", "closure_probe.py"),

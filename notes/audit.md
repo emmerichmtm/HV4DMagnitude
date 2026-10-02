@@ -254,12 +254,62 @@ number of primitives" is literally true, but in four dimensions that constant is
 of order 10² before anyone tries to optimise it, and the report's complexity
 statement would read more usefully with that number in it.
 
-### What is still not proved
+### The compressor A/B (Phase 7)
 
-Nothing in the normal form itself. What remains is integration: wiring the
-compressor into Chan's recursion behind `compression_backend="prefix4"` and
-measuring end-to-end, which is Phase 9 of the task specification. That is an
-engineering exercise against a now-validated component, not an open question.
+The prefix compressor was compared directly against FastHVChan's
+`compress_terms` on identical grounded 4-D states. Both claim the same defining
+property -- the compressed state integrates to the original mass over every cell
+of the hard grid -- so both were checked against exact enumeration on every
+cell:
+
+```
+32 hard-grid cells: legacy and prefix compressors both agree with exact mass
+```
+
+A cell mass from the prefix state is the 16-corner finite difference of the
+four-prefix function, arranged as four states (the source caps `a, b` select
+which regions are rectangles, so they are fixed at build time) each queried at
+four `(c, d)` corners. That is the report's "16 prefix evaluations per grid
+cell", realised.
+
+So the prefix compressor is a valid replacement for `compress_terms` on the
+grounded four-dimensional path.
+
+### What is still not done, and one reason it matters less than expected
+
+Full recursion integration (Phase 9) -- running the solver with
+`compression_backend="prefix4"` end to end -- is not implemented, for a concrete
+reason: it needs a constructor that `symbolic.py` does not provide. Compression
+at depth must build a state from the newly easy six staircases **times an
+incoming J-primitive**, whereas `build_state` handles the generation-0 case
+(six staircases alone). The composition is known to close -- that is what
+`closure_probe.py` measures -- but emitting its primitives as data is a further
+derivation, not a wiring exercise.
+
+There is also an empirical reason the end-to-end A/B would say less than one
+would hope. On grounded 4-D workloads the legacy compressor **never fires**:
+
+```
+n=20   nodes=55    term_high_water=1  compressions=0
+n=40   nodes=155   term_high_water=1  compressions=0
+n=80   nodes=419   term_high_water=1  compressions=0
+n=160  nodes=1077  term_high_water=1  compressions=0
+```
+
+For grounded orthants, absorption only adds or merges conditions and never
+multiplies terms, so the representation never outgrows its post-compression
+size and the adaptive trigger never pulls. Both the component being replaced and
+its replacement are therefore dead code on exactly the workload the report
+targets, unless compression is forced on. An end-to-end comparison would be
+measuring two things that do not run.
+
+That is worth knowing independently of this prototype: it says the compression
+machinery -- the hardest part of Chan's Section 4 and the part this report sets
+out to simplify -- is not what costs time on the grounded four-dimensional
+hypervolume problem. The cost is in the cutting recursion and in the per-node
+integration. A simplification of compression is still worth having for the
+general case and for the proof, but it should not be expected to show up in
+grounded 4-D hypervolume timings.
 
 ## What is not verified
 

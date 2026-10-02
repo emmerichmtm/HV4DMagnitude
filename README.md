@@ -82,7 +82,8 @@ the magnitude measure; the short form:
 | Closure over *multiple* generations | ✅ exact over 4 generations (456 cells, error 0 / 4e-15); `R` stable at 17-21 |
 | Compressed state is `O(m)` with no Cartesian blowup | ✅ primitives constant in `m` (196 raw, ~130 merged); records `O(m)` |
 | Normal form emitted as data | ✅ `symbolic.py`; 216/216 queries from primitives alone |
-| End-to-end `prefix4` agrees with the legacy backend | ◻ partial: the model agrees with FastHVChan on purely two-sided instances (40 cases); the compressor is not wired into the recursion |
+| New compression agrees with legacy `compress_terms` | ✅ 32 hard-grid cells, both against exact mass |
+| End-to-end `prefix4` agrees with the legacy backend | ❌ needs the composed constructor; and compression never fires on grounded 4-D anyway — see the audit |
 | Cutting recursion unchanged | ✅ untouched — nothing in `FastHVChan` was modified |
 | Documented `Õ(n^{4/3})` overall bound | ❌ not tested here |
 

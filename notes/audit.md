@@ -438,3 +438,70 @@ comparison type to destination. The remaining engineering is now specified
 rather than open. The empirical caveat from the previous section still stands:
 compression does not fire on grounded 4-D workloads, so an end-to-end A/B would
 measure a path that does not execute unless compression is forced on.
+
+
+---
+
+## End-to-end: the normal form computes hypervolume inside Chan's recursion
+
+`solver.py` is a grounded 4-D hypervolume solver that keeps Chan's structure
+unchanged -- absorption, weighted-median cuts on `(d-3)`-faces, inclusion-
+exclusion at the base case -- and replaces only *how the easy residual is
+integrated*, routing it through the four-prefix normal form. A box integral is
+the signed 16-corner difference of prefix queries.
+
+It agrees with the independent `chan_hypervolume` implementation on every
+instance tried: random fronts up to `n=20`, fully non-dominated spherical fronts
+up to `n=40`, tie-heavy integer grids, duplicates, nested points, and a point at
+the origin.
+
+More tellingly, the recursion tree matches:
+
+| `n` | nodes, prefix solver | nodes, reference d/3 solver |
+|---|---|---|
+| 5 | 5 | 5 |
+| 10 | 19 | 19 |
+| 20 | 61 | 61 |
+| 40 | 153 | 159 |
+
+Identical up to `n=20`; the small divergence at 40 is tie-breaking in the
+weighted median, the same effect already documented between the C and Python
+ports of the reference. So the cut decisions really are Chan's, and the
+substitution is confined to the integration step, as the report intends.
+
+**No compression is needed for this to work.** Compression bounds symbolic
+growth, and on grounded orthants it never triggers; the easy state at any cell
+is always exactly six staircases, rebuilt from the orthants active there. That
+is why a working solver was reachable without the parametric re-expression
+constructor, and it is a second, independent reason the end-to-end A/B
+discussed earlier would have measured very little.
+
+### Two bugs found by doing this, both worth recording
+
+**1. The easy orthants must be passed down through a cut.** My first version
+recursed with only the hard orthants, on the reasoning that the easy ones had
+been absorbed into the staircases. They had -- but into *this* cell's
+staircases. Below a cut each child rebuilds its own, so an orthant absorbed at
+the parent still covers volume in the children and must be handed down. (Its
+active-constraint count can only fall as the cell shrinks, so an easy orthant
+stays easy; nothing is lost by re-absorbing.) Results were correct whenever the
+base case was reached without cutting, which is why small `n` passed.
+
+**2. Staircases must be clamped to the cell, or the separable split diverges.**
+This one is a genuine remark about the normal form, not about my code. Branch 2
+of the staircase formula is split as `P(A) + Q(B)` precisely to make the two
+factors separable. But
+
+    P(A) = ∫ Y(f(x)) dμ₁
+
+diverges when `f ≡ +∞`, which is exactly what a pair with no quadrant looks
+like. The split then evaluates as `∞ − ∞` and returns NaN, while the quantity
+it represents is perfectly finite. Inside a bounded cell the repair is exact
+rather than a patch: a vacuous constraint *is* the cell's ceiling on that axis,
+so clamping `f_ij ← min(f_ij, hi_j)` restores both finiteness and separability.
+
+This is worth a sentence in the report. The separable split is what the whole
+normal form is built on, and it is only valid for staircases that are finite on
+the cell. Stated as "clamp every staircase to the cell before splitting" it
+costs nothing and removes a failure mode that is invisible until a pair happens
+to carry no quadrant.

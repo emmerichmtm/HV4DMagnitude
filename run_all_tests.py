@@ -16,6 +16,7 @@ SUITES = [
     ("Phases 8,10 closure and magnitude oracle", "tests/test_closure.py"),
     ("Phase 7     vs legacy compress_terms", "tests/test_vs_legacy_compressor.py"),
     ("Phase 9     cross-check vs FastHVChan", "tests/test_against_fasthvchan.py"),
+    ("Phase 9     end-to-end 4-D hypervolume solver", "tests/test_solver.py"),
     ("Phase 8+    multi-generation compression", "generations.py"),
     ("Phase 11    blow-up factor vs instance size", "closure_probe.py"),
 ]

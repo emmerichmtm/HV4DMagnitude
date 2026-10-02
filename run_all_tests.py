@@ -12,6 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SUITES = [
     ("Phases 1-4  identities", "tests/test_identities.py"),
     ("Phases 5-6  four-prefix normal form", "tests/test_prefix4.py"),
+    ("Phase 6e-f  normal form as data", "tests/test_symbolic.py"),
     ("Phases 8,10 closure and magnitude oracle", "tests/test_closure.py"),
     ("Phase 9     cross-check vs FastHVChan", "tests/test_against_fasthvchan.py"),
     ("Phase 8+    multi-generation compression", "generations.py"),

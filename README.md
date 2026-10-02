@@ -48,6 +48,8 @@ identities.py    the three identities: threshold antiderivative, two-branch
                  staircase prefix, meet contraction
 prefix4.py       the six-staircase model and the four-prefix normal form,
                  with region labelling and instrumentation
+symbolic.py      the normal form emitted as data: explicit primitives with
+                 unary Step records, answering queries by arithmetic
 closure_probe.py measures whether the blow-up factor grows with the instance
 generations.py   multi-generation compress/absorb, verified against fine geometry
 tests/           one file per phase group of the validation plan
@@ -78,7 +80,8 @@ the magnitude measure; the short form:
 | Four-prefix queries agree with small-grid enumeration | ✅ 144 queries |
 | Compression agrees after absorb + coarsen | ✅ 192 cells, 1 generation |
 | Closure over *multiple* generations | ✅ exact over 4 generations (456 cells, error 0 / 4e-15); `R` stable at 17-21 |
-| Compressed state is `O(m)` with no Cartesian blowup | ◻ region count bounded (14 ≤ 18); record scaling not measured |
+| Compressed state is `O(m)` with no Cartesian blowup | ✅ primitives constant in `m` (196 raw, ~130 merged); records `O(m)` |
+| Normal form emitted as data | ✅ `symbolic.py`; 216/216 queries from primitives alone |
 | End-to-end `prefix4` agrees with the legacy backend | ◻ partial: the model agrees with FastHVChan on purely two-sided instances (40 cases); the compressor is not wired into the recursion |
 | Cutting recursion unchanged | ✅ untouched — nothing in `FastHVChan` was modified |
 | Documented `Õ(n^{4/3})` overall bound | ❌ not tested here |

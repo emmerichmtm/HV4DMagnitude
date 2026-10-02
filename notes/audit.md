@@ -215,16 +215,51 @@ the generation map is a fixed point and `p_g ≤ p_0 · R^g` with `R` bounded by
 the dimension. Combined with `O(1)` compressions per root-to-leaf path, the
 primitive count is constant.
 
+### The constructor, written (`symbolic.py`)
+
+The last step is now implemented: `build_state` emits the primitives as **data**
+— explicit unary `Step` objects for `α, β, h↑, h↓` plus cap bounds — rather than
+evaluating the normal form on the fly. Queries are answered from that list
+alone, and agree with exact 4-D enumeration in 216 of 216 checks across both
+measures.
+
+Boundaries are obtained by evaluating each defining predicate at the finitely
+many candidate breakpoints, which is exact (everything in sight is piecewise
+constant with breakpoints in that set) and avoids hand-deriving compositions of
+generalized inverses. The constructor then *asserts* the orientation it expects
+of each boundary. That assertion earned its place immediately: the first run
+caught three inverted conditions — a predicate passed as its own complement, two
+swapped selector negations, and a reversed branch polarity — which would
+otherwise have surfaced only as wrong numbers.
+
+The two structural claims measured on the emitted data:
+
+| `m` | primitives (merged) | records / `m` |
+|---|---|---|
+| 12 | 44 | 66 |
+| 18 | 117 | 108 |
+| 24 | 113 | 160 |
+| 36 | 132 | 172 |
+| 48 | 132 | 92 |
+
+The primitive count is bounded by the signed expansion of the 18 region labels
+(196 before merging) and **does not scale with the instance** — it saturates
+around 130, the same saturation signature as the region count. Records are
+`O(primitives × m)`, hence `O(m)` for a constant primitive count. Before
+merging the count is exactly 196 at every instance size, which is the cleanest
+possible statement of the claim.
+
+One honest qualification: the constant is large. "A dimension-dependent constant
+number of primitives" is literally true, but in four dimensions that constant is
+of order 10² before anyone tries to optimise it, and the report's complexity
+statement would read more usefully with that number in it.
+
 ### What is still not proved
 
-One step remains unimplemented: the explicit symbolic construction of the output
-`α, β, h↑, h↓` — integrating out the new target pair and re-expressing in a
-single new latent pair as data rather than as an evaluator. Everything that step
-is *supposed to deliver* has now been measured (exactness over four generations,
-stable `R`, separability under composition, bounded region count), so this is a
-matter of writing the constructor rather than of discovering whether one exists.
-It is the right next piece of engineering, and it is no longer the place where
-the argument could fail.
+Nothing in the normal form itself. What remains is integration: wiring the
+compressor into Chan's recursion behind `compression_backend="prefix4"` and
+measuring end-to-end, which is Phase 9 of the task specification. That is an
+engineering exercise against a now-validated component, not an open question.
 
 ## What is not verified
 

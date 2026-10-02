@@ -55,6 +55,8 @@ symbolic.py      the normal form emitted as data: explicit primitives with
                  unary Step records, answering queries by arithmetic
 solver.py        a working grounded 4-D hypervolume solver: Chan's recursion
                  with the prefix normal form doing the integration
+fastkernel.py    numba-JIT kernel for the four-prefix query (optional; falls
+                 back to identical pure Python when numba is absent)
 closure_probe.py measures whether the blow-up factor grows with the instance
 generations.py   multi-generation compress/absorb, verified against fine geometry
 tests/           one file per phase group of the validation plan

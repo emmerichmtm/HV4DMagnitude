@@ -54,9 +54,11 @@ PAIRS = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
 class PrefixHV4D:
     """Chan's grounded 4-D recursion with the prefix normal form inside."""
 
-    def __init__(self, base_hard: int = 2, use_symbolic: bool = False):
+    def __init__(self, base_hard: int = 2, use_symbolic: bool = False,
+                 fast: bool = True):
         self.base_hard = base_hard
         self.use_symbolic = use_symbolic
+        self.fast = fast
         self.counters: Dict[str, int] = {
             "nodes": 0, "box_integrals": 0, "prefix_queries": 0,
             "covers": 0, "slab_shrinks": 0,
@@ -185,7 +187,8 @@ class PrefixHV4D:
             pt = [hi[k] if corner[k] else lo[k] for k in range(4)]
             parity = (-1.0) ** (4 - sum(corner))
             self.counters["prefix_queries"] += 1
-            total += parity * p4.K_decomposed(*pt)
+            total += parity * (p4.K_fast(*pt) if self.fast
+                               else p4.K_decomposed(*pt))
         return total
 
     def _cut_candidates(self, hard, lo, hi, depth):

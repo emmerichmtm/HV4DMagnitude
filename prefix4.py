@@ -103,6 +103,7 @@ class Prefix4:
         self.g1, self.g2, self.g3, self.g4 = [list(g) for g in grids]
         self.counters: Dict[str, int] = {"regions": 0, "records": 0,
                                          "source_evals": 0}
+        self._packed = None
         self._build_unary()
 
     # -- the unary records: X, Y, P, Q ------------------------------------- #
@@ -270,6 +271,13 @@ class Prefix4:
                               [lim_a, lim_b])
 
     # -- the four-prefix integral ------------------------------------------ #
+
+    def K_fast(self, a: float, b: float, c: float, d: float) -> float:
+        """``K(a,b,c,d)`` through the compiled kernel, built once per state."""
+        if self._packed is None:
+            from fastkernel import PackedStaircases
+            self._packed = PackedStaircases(self)
+        return self._packed.query(a, b, c, d)
 
     def K_decomposed(self, a: float, b: float, c: float, d: float) -> float:
         """``K(a,b,c,d)`` as an outer target integral of the separable source."""

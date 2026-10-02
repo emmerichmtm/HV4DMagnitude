@@ -616,3 +616,46 @@ So the honest summary stands: the method is not shown to be slow, but no speed
 benefit exists or is claimed, and the realistic best case for this line of work
 on grounded 4-D hypervolume is parity with the existing d/3 implementation, not
 with the practical algorithms.
+
+
+### With a compiled kernel
+
+The target sweep is arithmetic on flat arrays once the step functions are
+unpacked, so it compiles. `fastkernel.py` holds a numba-JIT kernel computing
+exactly what the pure-Python path computes; the two were checked against each
+other and agree **bit for bit** (1,440 queries, worst difference 0.00e+00).
+
+Spherical fronts, seconds:
+
+| `n` | prefix + JIT | prefix, pure Python | JIT gain | FastHVChan d/3 | FastHVChan d/2 | dimension sweep |
+|---|---|---|---|---|---|---|
+| 10 | 0.0135 | 0.070 | 5.2x | 0.0097 | 0.0023 | 0.0004 |
+| 20 | 0.0273 | 0.256 | 9.4x | 0.0406 | 0.0081 | 0.0015 |
+| 40 | 0.1126 | 1.418 | 12.6x | 0.1855 | 0.0316 | 0.0057 |
+| 80 | 0.2699 | 2.832 | 10.5x | 0.3636 | 0.0680 | 0.0181 |
+| 160 | 0.4493 | 4.074 | 9.1x | 0.5820 | 0.1407 | 0.0546 |
+
+With the kernel the prefix solver is **1.3-1.6x faster than the FastHVChan
+Section-4.2 solver** from `n = 20` upward.
+
+**That comparison is not like-for-like, and the difference is not algorithmic.**
+One side is compiled and the other is interpreted. Running both in pure Python
+on the same instances reverses it:
+
+| `n` | prefix, pure Python | FastHVChan d/3, pure Python | |
+|---|---|---|---|
+| 20 | 0.177 | 0.025 | mine 7.0x slower |
+| 40 | 0.634 | 0.084 | mine 7.5x slower |
+| 80 | 1.989 | 0.372 | mine 5.4x slower |
+
+So the honest reading is: *the prefix formulation compiles well* -- its inner
+loop is flat-array arithmetic with no symbolic dispatch, which is a genuine
+property of the `2+2` normal form and arguably the most practically interesting
+thing to come out of this exercise. But per unit of work it still does ~6x more
+than the existing Section-4.2 implementation, and the apparent win comes from
+JIT compilation, which would equally be available to the other solvers.
+
+Against the practical algorithms the ordering is unchanged: at `n = 40` the
+compiled prefix solver is still ~3.6x slower than Section 2 and ~20x slower than
+the dimension sweep, both of which are pure Python and would themselves gain
+from compilation.

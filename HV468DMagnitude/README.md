@@ -7,11 +7,12 @@ The 4-D case is verified end to end in the parent project. This one tests the
 generalization: that eliminating variables from a *weighted monotone-pair term*
 stays inside the class, with branching bounded by dimension alone.
 
-**Status: no counterexample found. The elimination calculus is implemented and
-exact at `p = 2,3,4,5,6,8` under both Lebesgue and magnitude product measures,
-with zero abstentions.** Four blocking defects in the report's written
-statements were found and repaired to get there; the compression that *uses*
-the calculus is still validated only at `d = 4`.
+**Status: no counterexample found, and no abstentions remain.** The elimination
+calculus is exact against product-grid oracles at `p = 2..6, 8, 9, 10, 12` under
+both Lebesgue and magnitude product measures, and for non-monotone boundaries of
+every shape — hills, valleys, zigzags — through `p = 7`. Five blocking defects in
+the report's written statements were found and repaired to get there. The
+compression that *uses* the calculus is still validated only at `d = 4`.
 
 * [`notes/REPORT_PROBLEMS.md`](notes/REPORT_PROBLEMS.md) — itemized problems
   with the report, by severity
@@ -34,6 +35,7 @@ measures.
 | 5 | 12 | exact | 0 | 4 |
 | 6 | 12 | exact | 0 | 14 |
 | 8 | 8 | exact | 0 | 3 |
+| 9, 10, 12 | 6 each | exact (coarse grid) | 0 | — |
 
 ### Which dimension that corresponds to
 
@@ -47,7 +49,24 @@ and the distinction is the difference between "validated at `d = 8`" and
 | compression numerator | `p = 2d` | 8 | 12 | 16 |
 
 So the static chains behind `T_6 = Õ(n²)` and `T_8 = Õ(n^{8/3})` are tested at
-their own `p`. Compression is reached only for `d = 4`.
+their own `p`. `p = 12` reaches the variable count for `d = 6` compression, but
+the compression integrand itself has not been built.
+
+### Non-monotone boundaries
+
+Nothing abstains on shape any more. A *valley* — a boundary that falls then
+rises — has a superlevel set of two disjoint runs, and since the integral over a
+disjoint union is the sum, each run becomes its own signed term.
+
+| shape | p | instances each | exact | max runs | max combos |
+|---|---|---|---|---|---|
+| hill | 2, 3, 4 | 20 | yes | 2 | 16 |
+| valley | 2, 3, 4 | 20 | yes | 2 | 12 |
+| zigzag | 2, 3, 4 | 20 | yes | 2 | 96 |
+| mixed | 3, 4, 5 | 16 | yes | 2 | 64 |
+
+Valleys stay exact to `p = 7`. Zigzags at `p = 7` exceed a nine-minute budget —
+a cost limit, not a coverage one.
 
 ### The claim that matters
 
@@ -58,50 +77,48 @@ predicate graph fixed and varying only staircase resolution:
 |---|---|---|---|---|---|---|---|
 | max branching | 2 | 8 | 10 | 8 | 10 | 9 | 9 |
 
-A 9x increase in breakpoints leaves branching at 9–10. At `p = 6` the maximum
-also saturates (18, 19, 16) but the mean still creeps, so saturation is clean at
-`p = 4` and only probable at `p = 6`.
+A 9× increase in breakpoints leaves branching at 9–10. At `p = 6` the maximum
+nearly levels off (18, 19, 20) but the mean still creeps, so saturation is clean
+at `p = 4` and only probable at `p = 6`.
 
-Branching stays modest in `p` (2–15 through `p = 9`); **peak state size** is the
-real cost driver, reaching 499 terms at `p = 8`.
-
-### Coverage ceiling
-
-The constructor abstains rather than guessing when a feasible set is not an
-interval. That is the superlevel set of a *valley* — a pair carrying two
-opposite-orientation predicates on the lower side. A *hill* is fine, and is what
-the one-turn extension admits.
-
-Coverage is complete through `p = 8`. From `p = 9` it degrades as graphs
-densify (4/6, 2/6, 2/6, 1/6 at `p = 9..12`). Closing it means splitting a
-two-run feasible set into two signed terms — routine, not implemented.
+Branching stays modest in `p`; **peak state size** is the real cost driver,
+reaching 4828 terms at `p = 12`. Run splitting is cheap: runs never exceed 2 and
+branch products never exceed 64.
 
 ## Running
 
 ```bash
 python tests/test_elimination.py
+python tests/test_valley.py
 python complexity_probe.py
 ```
 
 ## Layout
 
 ```
-pair_state.py             weighted monotone-pair terms, decorated bounds
+pair_state.py             weighted monotone-pair terms, decorated bounds,
+                          split atom/continuous weights
 pair_elimination.py       the elimination constructor plus instrumentation
 pair_oracles.py           exact product-grid enumeration (atom as its own cell)
 complexity_probe.py       branching vs instance size, and vs dimension
-tests/                    elimination against the oracles
+tests/test_elimination.py elimination against the oracles
+tests/test_valley.py      non-monotone boundaries, run decomposition
 notes/                    the audit, the problems list, and the task prompt
 ```
 
-## Two methodology notes worth carrying forward
+## Three methodology notes worth carrying forward
 
-**The magnitude measure earns its place in the test suite.** Of the six genuine
-bugs across the two sprints, four were invisible under Lebesgue and exposed only
-by magnitude — all four endpoint or atom errors at `0`. That is an argument for
-the product-measure framing on its own terms, independent of the complexity
-result.
+**The magnitude measure earns its place in the test suite.** Of the seven
+genuine bugs across these sprints, five were invisible under Lebesgue and
+exposed only by magnitude — every one an endpoint or atom error at `0`. That is
+an argument for the product-measure framing on its own terms, independent of the
+complexity result.
+
+**But an under-powered generator hides bugs from both measures.** The suite
+spent a long time generating only `upper=True, strict=True` predicates, which
+concealed a representation defect that was wrong under Lebesgue too. Varying the
+decorations mattered as much as varying the measure.
 
 **A NaN passes a tolerance check.** `abs(got - want) > tol` is `False` when
 `got` is NaN, so a full test cycle reported "no mismatches" while returning NaN
-throughout. The suite now rejects NaN explicitly.
+throughout. Both suites now reject NaN explicitly.

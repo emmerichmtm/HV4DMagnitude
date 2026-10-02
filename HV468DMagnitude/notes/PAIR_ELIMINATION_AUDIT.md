@@ -82,9 +82,16 @@ condition the construction actually needs is that the feasible set be an
 **interval**, tested by contiguity of the feasible run — not by orientation.
 This single change took `p = 6` from 0% coverage to 100%.
 
-The remaining gap is the *valley*: `max(h_up, h_down)` on the lower side leaves
-two disjoint runs, which is not an interval. The constructor abstains there.
-That is the coverage ceiling from `p = 9` upward.
+The *valley* -- `max(h_up, h_down)` on the lower side, whose feasible set is two
+disjoint runs -- was the remaining gap, and is now closed. `_feasible_runs`
+returns every maximal run, and since the integral over a disjoint union is the
+sum, a set with `r` runs becomes `r` signed terms. The run count varies per
+piece of the surviving variable, so the split is by run *index* with short
+pieces padded by the degenerate `[0, 0)`; and because intersecting two unions of
+runs gives the union over choices of one run from each, the branches multiply
+across the predicates incident to the eliminated variable. Measured run counts
+stay at 2 and branch products at 96 or below. This removed the `p = 9..12`
+abstentions entirely.
 
 ## Finding 3 — the decorated lower bound inverts in the cumulative difference
 
@@ -147,7 +154,39 @@ explicitly. Any audit of this report should assert non-NaN separately.
 Removing the NaNs also cut branching sharply — `p = 4`: 21 → 6, `p = 6`: 50 → 14
 — because NaN weights were never recognized as dead terms.
 
-## Finding 7 — the oracle has to be grid-aligned in values, not just breakpoints
+## Finding 7 — `upper != strict` inverts left-continuously, and the anchor needs its own weight
+
+Found by the valley tests, but not a valley bug at all -- a pre-existing one the
+earlier suite could not reach, because its generators only ever produced
+`upper = strict = True` predicates. With all four decorated comparisons
+generated, exactly the two *mixed* combinations failed.
+
+Inverting `v <| f(x)` gives a feasible `x`-set that moves as `v` crosses the
+values `f` attains, and the direction of continuity follows the decoration:
+`v < f(x)` and `v >= f(x)` are constant on `[a, b)`, matching a right-continuous
+`Step`, while `v <= f(x)` and `v > f(x)` are constant on `(a, b]` and cannot be
+written that way at all. Sampling the first piece at `0` then spread the `v = 0`
+value across the whole slab -- an error of full measure, which is why this one
+was wrong under **Lebesgue too**, not only under magnitude.
+
+Interior sampling repairs every piece except `v = 0` itself. That point is
+measure-zero under Lebesgue but carries mass 1 under magnitude, and the obvious
+fix is unavailable: a step function cannot distinguish `{0}` from `[0, x_0)`, so
+neither `[v = 0]` nor `[v > 0]` is expressible as a unary step density.
+
+**Repaired** by giving each axis's weight two components, as the measure itself
+has: a density against the continuous part and a separate weight at the anchor
+(`PairTerm.atoms`, `mul_split`, and a local `_cum_atom`). A left-continuous
+inversion then emits an extra branch owning the anchor alone, where the
+predicate's truth is independent of `x` -- `0 <= f(x)` holds for every `x`,
+`0 > f(x)` for none -- so that branch either drops the constraint or does not
+exist, while the run branches disown the anchor. The two families partition the
+surviving variable, so the atom is neither lost nor double-counted.
+
+All 32 combinations of shape, side, strictness and measure are now exact on a
+single predicate.
+
+## Finding 8 — the oracle has to be grid-aligned in values, not just breakpoints
 
 Not a report defect; a methodology note that cost real time twice across the two
 sprints. The oracle evaluates one representative per cell, which is exact only
@@ -176,7 +215,7 @@ because it makes the general argument rest on the simpler lemma.
 | 2 | finite label count | holds: product of the two candidate sets; measured max branching 2–14 for `p <= 8` |
 | 3 | separable branch formulas | verified at `p = 2..8`, both measures, zero abstentions |
 | 4 | closure of branch conditions | **fails as written** (Finding 1), repaired by admitting one-turn boundaries |
-| 5 | complement handling | partial: hills handled, valleys abstain — the `p >= 9` ceiling |
+| 5 | complement handling | holds: hills are one interval, valleys split into runs, and arbitrary-turn boundaries are handled on the same footing |
 | 6 | breakpoint complexity vs primitive count | holds: breakpoints per term *decrease* along the chain (`p=8`: 22 → 20.5 → 20.2 → 15.6 → 12.4 → 6.5 → 1 → 0) |
 | 7 | no hidden instance-size dependence in `B_p` | holds at `p = 4` (9x breakpoints, branching saturates at 9–10); consistent but not established at `p = 6`, where the mean still creeps |
 
@@ -195,8 +234,14 @@ Until 2 lands, the honest statement is: **the elimination calculus is validated
 to `p = 8`, which covers the static chain for `d <= 8`; the compression that
 uses it is validated only at `d = 4`.**
 
-Of the six genuine bugs across the two sprints, **four were invisible under
-Lebesgue and exposed only by magnitude** — all four endpoint or atom errors at
-`0`. That is the strongest practical argument for keeping the magnitude oracle
-in the suite, and an argument for the product-measure framing independent of the
-complexity result.
+Of the seven genuine bugs across these sprints, **five were invisible under
+Lebesgue and exposed only by magnitude** — every one an endpoint or atom error
+at `0`. That is the strongest practical argument for keeping the magnitude
+oracle in the suite, and an argument for the product-measure framing independent
+of the complexity result.
+
+Finding 7 is the instructive exception: it was wrong under Lebesgue as well, and
+survived because the generators only ever produced one of the four decorated
+comparison types. A representation defect hid behind an under-powered generator
+rather than behind the choice of measure. Both lessons are needed — vary the
+decorations, and test against the measure that gives the anchor mass.

@@ -81,12 +81,15 @@ def measure(p, n_break, k, trials, seed, measure_obj=LEBESGUE):
     domains = {a: DOM for a in axes}
     grids = {a: grid for a in axes}
     brs, peaks, bps, done, abst = [], [], [], 0, 0
+    runs = combos = 0
     for _ in range(trials):
         term = rand_term(rng, p, grid, n_break)
         c = Counters()
         got = eliminate_all([term], axes, measures, domains, grids, c,
                             term_cap=TERM_CAP)
         bps.append(term_breakpoints([term]))
+        runs = max(runs, c.max_runs)
+        combos = max(combos, c.max_combos)
         if got is None:
             abst += 1
             continue
@@ -94,8 +97,9 @@ def measure(p, n_break, k, trials, seed, measure_obj=LEBESGUE):
         brs.append(c.max_branching)
         peaks.append(c.peak_state)
     if not brs:
-        return (max(bps) if bps else 0, 0, 0.0, 0, done, abst)
-    return (max(bps), max(brs), statistics.mean(brs), max(peaks), done, abst)
+        return (max(bps) if bps else 0, 0, 0.0, 0, done, abst, runs, combos)
+    return (max(bps), max(brs), statistics.mean(brs), max(peaks), done, abst,
+            runs, combos)
 
 
 def sweep_size(p, ks, trials=10):
@@ -103,7 +107,7 @@ def sweep_size(p, ks, trials=10):
     print("    breaks/pred  term breakpoints  max B  mean B  peak state  done")
     for k in ks:
         n_break = k - 1
-        bps, mx, mean, peak, done, abst = measure(
+        bps, mx, mean, peak, done, abst, runs, combos = measure(
             p, n_break, k, trials, seed=90210)
         print(f"    {n_break:>11}  {bps:>16}  {mx:>5}  {mean:>6.1f}  "
               f"{peak:>10}  {done:>2}/{trials}"
@@ -112,12 +116,15 @@ def sweep_size(p, ks, trials=10):
 
 def sweep_dimension(ps, k=4, trials=10):
     print(f"\n  dimension at fixed resolution (k={k} grid points)")
-    print("    p   term breakpoints  max B  mean B  peak state  done")
+    print("    p   term breakpoints  max B  mean B  peak state  runs  combos  done")
     for p in ps:
-        bps, mx, mean, peak, done, abst = measure(
-            p, 2, k, trials, seed=31337)
+        # Above p=8 the state is large enough that ten trials costs minutes for
+        # no extra information, so the sample is halved and the count printed.
+        n = trials if p <= 8 else max(trials // 2, 4)
+        bps, mx, mean, peak, done, abst, runs, combos = measure(
+            p, 2, k, n, seed=31337)
         print(f"    {p:>2}  {bps:>16}  {mx:>5}  {mean:>6.1f}  "
-              f"{peak:>10}  {done:>2}/{trials}"
+              f"{peak:>10}  {runs:>4}  {combos:>6}  {done:>2}/{n}"
               + (f"  ({abst} abstained)" if abst else ""))
 
 
@@ -126,4 +133,4 @@ if __name__ == "__main__":
     print("  B = terms emitted by one elimination from one incoming term")
     sweep_size(4, [2, 3, 4, 6, 8, 12, 16])
     sweep_size(6, [2, 3, 4, 6, 8])
-    sweep_dimension([2, 3, 4, 5, 6, 7, 8])
+    sweep_dimension([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])

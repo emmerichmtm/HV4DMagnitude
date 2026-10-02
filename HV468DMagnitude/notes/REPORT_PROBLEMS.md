@@ -5,12 +5,13 @@ Algorithm*, section **General fixed-dimensional pair elimination**
 (`paper/magnitude_chan_pair_elimination_report.tex`, `\label{sec:generalpair}`).
 
 Nothing below is a counterexample to the main theorem. I tried to break it and
-could not: the constructor now agrees with exact oracles at `p = 2,3,4,5,6,8`
-under both Lebesgue and magnitude product measures, with zero abstentions. The
+could not: the constructor now agrees with exact oracles at `p = 2..6, 8, 9, 10`
+and `12` under both Lebesgue and magnitude product measures, with zero
+abstentions, and with non-monotone boundaries of every shape. The
 problems are of three kinds, and they are not equally serious:
 
 * **Blocking** — the statement as written is false or unusable, and a reader
-  implementing from the text will get a wrong answer. Four of these.
+  implementing from the text will get a wrong answer. Five of these.
 * **Gap** — the claim appears true (I measured it) but the proof does not
   contain the argument. Three.
 * **Editorial** — correct but misleading, understated, or out of date. Three.
@@ -78,17 +79,71 @@ That disjunction is not exhaustive, for two independent reasons:
 2. Once B1 is repaired and one-turn maps are in the class, the superlevel set of
    a hill is a genuine middle interval with two nontrivial endpoints.
 
-**Fix.** State the inversion as returning a *decorated interval* whose two
-endpoints are each unary functions of one surviving variable, plus a `0/1` unary
-filter recording the pieces where the interval is empty. Add the side condition
-the construction actually needs: the feasible set must be an **interval**. It is
-not, for the superlevel set of a valley (`min` of two opposite-orientation maps
-on the *lower* side), and there the construction genuinely does not apply.
-Testing contiguity of the feasible run is the right criterion; testing
-orientation is not.
+**Fix.** State the inversion as returning a *finite union of decorated
+intervals* whose endpoints are each unary functions of one surviving variable,
+plus a `0/1` unary filter recording the pieces where a run is absent. The
+feasible set is a single interval for a monotone map and for a hill, but the
+superlevel set of a *valley* is two disjoint runs. Since the integral over a
+disjoint union is the sum, each run becomes its own signed term; the number of
+runs varies per piece, so the split is by run *index*, and it multiplies across
+the predicates incident to the eliminated variable (intersecting two unions of
+runs gives the union over choices of one run from each). All of that stays
+`O_p(1)`.
 
-**Evidence.** This single change is what moved `p = 6` from 0% coverage to
-100%.
+**Evidence.** Interval-valued inversion moved `p = 6` from 0% coverage to 100%;
+run splitting then removed the remaining abstentions at `p = 9..12`, with
+`p = 9, 10, 12` exact against a coarse oracle. Measured run counts stay at 2 and
+branch products at 96 or below.
+
+### B5. Inverting a non-strict upper or strict lower predicate is left-continuous, and the anchor atom needs its own weight
+
+Definition 1 says the decorated comparison carries "EMPTY/FULL and endpoint
+openness explicitly", but neither lemma proof says what that costs. It costs
+more than bookkeeping.
+
+Invert `v <| f(x)` for `v` a surviving variable. The feasible `x`-set moves as
+`v` crosses the values `f` attains, and the direction of continuity depends on
+the decoration:
+
+| predicate | feasible set | constant on | representable right-continuously |
+|---|---|---|---|
+| `v < f(x)` | `{f > v}` | `[a, b)` | yes |
+| `v >= f(x)` | `{f <= v}` | `[a, b)` | yes |
+| `v <= f(x)` | `{f >= v}` | `(a, b]` | **no** |
+| `v > f(x)` | `{f < v}` | `(a, b]` | **no** |
+
+The two left-continuous cases — exactly those with `upper != strict` — cannot be
+written as right-continuous step functions of `v`. A right-continuous
+representation is wrong only at the jump points, which is harmless for every
+jump except the one at `v = 0`: under magnitude the anchor has mass 1, so that
+single point is a mass-1 error, while under Lebesgue it is invisible.
+
+Worse, the natural repair is not available in the stated class. A step function
+cannot distinguish `{0}` from `[0, x_0)`, so **neither `[v = 0]` nor `[v > 0]` is
+expressible** as a unary step density, and Definition 1 offers nothing else.
+
+**Fix.** Give the weight on each axis two components, as the measure itself has:
+a density against the continuous part and a separate weight at the anchor. Then
+state in the normalization that a left-continuous inversion emits an extra
+branch owning the anchor alone, where the predicate's truth is independent of
+`x` — `0 <= f(x)` holds for every `x` and `0 > f(x)` for none, since every value
+in this class is non-negative — so that branch either drops the constraint or
+does not exist, and the run branches disown the anchor. The two families then
+partition the surviving variable.
+
+**Evidence.** With only `upper = strict = True` predicates, everything passed.
+Generating all four combinations, the two mixed ones failed on a *single*
+predicate in two variables — `hill, upper=True, strict=False` gave 4.0 against
+2.0 under Lebesgue, and `hill, upper=False, strict=True` gave 0.0 against 2.0.
+The Lebesgue errors came from the interior-sampling half of the bug; the
+magnitude errors needed the split weight. After both, all 32 combinations of
+shape, side, strictness and measure are exact.
+
+This is the fifth bug in this class that Lebesgue hid and magnitude exposed, and
+the first that Lebesgue *also* got wrong — worth noting, because it means the
+"magnitude catches endpoint errors" lesson understates the problem: the
+representation defect was real under both measures, and only its anchor
+component was magnitude-specific.
 
 ### B3. EMPTY has no safe numeric encoding, and the text does not supply one
 
@@ -252,9 +307,10 @@ compression that uses it is tested only at `d = 4`".
 | # | kind | item | status in code |
 |---|---|---|---|
 | B1 | blocking | monotone-only class not closed; invariant is load-bearing | repaired (one-turn admitted) |
-| B2 | blocking | inversion is interval-valued, not one-sided | repaired |
+| B2 | blocking | inversion is a union of runs, not a one-sided bound | repaired (run splitting) |
 | B3 | blocking | EMPTY has no safe encoding; NaN survives zero-multiplication | repaired (degenerate `[c,c)`) |
 | B4 | blocking | label partition double-counts ties | repaired (first-winner) |
+| B5 | blocking | `upper != strict` inverts left-continuously; anchor needs its own weight | repaired (split weight + anchor branch) |
 | G1 | gap | `B_p` independent of `N` asserted, not proved | measured, saturates |
 | G2 | gap | breakpoint growth along the chain not addressed | measured, decreases |
 | G3 | gap | `C_d = 2^{O(d^3)}` left implicit where it compounds | measured peak state |
@@ -262,10 +318,16 @@ compression that uses it is tested only at `d = 4`".
 | E2 | editorial | ceiling clamp missing from normalization, and its scope | repaired, scope documented |
 | E3 | editorial | validation status stale, but should stay narrow | — |
 
-One more observation that belongs in the paper rather than in this list: of the
-five genuine bugs across the two sprints, **four were invisible under Lebesgue
-and exposed only by the magnitude measure** — all four were endpoint or atom
-errors at `0`. Keeping the magnitude oracle in the test suite is the single
-most effective check on this class of construction, and that is an argument for
-the product-measure framing on its own terms, independent of the complexity
-result.
+One more observation that belongs in the paper rather than in this list. Of the
+seven genuine bugs across these sprints, **five were invisible under Lebesgue
+and exposed only by the magnitude measure**, every one an endpoint or atom error
+at `0`. Keeping the magnitude oracle in the suite is the single most effective
+check on this class of construction, and that is an argument for the
+product-measure framing on its own terms, independent of the complexity result.
+
+The counterpart is worth saying too, because it cuts the other way: B5 was
+wrong under Lebesgue *as well*, and it went unnoticed because the test
+generators only ever produced one of the four decorated comparison types.
+A measure-agnostic representation defect hid behind an under-powered generator,
+not behind the choice of measure. Both lessons are needed: vary the decorations,
+and check against the measure that gives the anchor mass.

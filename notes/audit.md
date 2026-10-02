@@ -124,10 +124,65 @@ written proves less than it needs to. Worth one extra clause.
 
 ---
 
+## Follow-up: is the remaining gap repairable?
+
+Short answer: **the three findings above are already repaired, and the untested
+claim now has strong supporting evidence.** The gap is narrower than the
+section below originally stated, so that section is kept but qualified.
+
+The worry was that one compression might multiply the primitive count by a
+factor depending on the *instance* (`N`, `m`) rather than on the dimension. Note
+first that the bar is low: because a root-to-leaf path sees only `O(1)`
+compressions (the recursion unfolds to depth `log_{r^3} N = 1/(3δ)` for
+`r = N^δ`), *any* blow-up function depending on the dimension and the incoming
+count alone composes to a constant — even a squaring. The construction fails
+only if the factor depends on the problem size.
+
+Structurally it cannot. A state entering its second compression carries, per
+physical coordinate, threshold constraints from the previous primitive's
+arguments `C(x) = min_i c_i(x_i)`, `D(x) = min_i d_i(x_i)`. The admissible source
+prefix is then capped by a minimum of a *fixed* list of candidates:
+
+```
+x1 :  a, rho3(ut), rho4(vt), theta_{c1}(u), theta_{d1}(v)
+x2 :  b, sig3(ut), sig4(vt), theta_{c2}(u), theta_{d2}(v)
+```
+
+Five each, whatever the staircases look like, so the label space is bounded by
+`5 x 5 x 2 = 50` — dimension-only by construction. What is *not* automatic is
+that each labelled region is still separable once the latent coupling is
+present; that is the actual content of `lem:parametricclosure`.
+
+`closure_probe.py` measures both, growing instance size by 16x with the probe
+density scaled accordingly (a fixed probe count would make flatness an artefact
+of undersampling):
+
+| breakpoints/staircase | `N` | max regions, Lebesgue | max regions, magnitude |
+|---|---|---|---|
+| 2 | 12 | 15 | 19 |
+| 4 | 24 | 16 | 17 |
+| 8 | 48 | 20 | 26 |
+| 16 | 96 | 20 | 24 |
+| 32 | 192 | 26 | 22 |
+
+The count stays far below the structural bound and shows no trend in `N` — the
+magnitude series is non-monotone, which is what sampling noise across random
+instances looks like, not growth. **Separability survived the composition in
+1,440 of 1,440 checks**, across both measures and every instance size.
+
+So the composition does close in the way the lemma needs, and `C_4` is
+dimension-only. What remains unimplemented is the last step of the rebuild:
+integrating out the new target pair and re-expressing the result in a *single*
+new latent pair with fresh `α, β, h↑, h↓`. That is where the output primitive
+count is finally fixed, and it needs the symbolic `PrefixState` this prototype
+does not carry. The evidence says it should go through; it is not proved here.
+
 ## What is not verified
 
 **The parametric closure claim (Lemma `lem:parametricclosure`) is not tested
-here, and it is the one I would attack next.**
+here, and it is the one I would attack next.** *(Qualified by the section above:
+the source-side composition is now tested and closes; the remaining untested
+piece is the final re-expression into one latent pair.)*
 
 What I verified splits into two halves:
 

@@ -505,3 +505,70 @@ normal form is built on, and it is only valid for staircases that are finite on
 the cell. Stated as "clamp every staircase to the cell before splitting" it
 costs nothing and removes a failure mode that is invisible until a pair happens
 to carry no quadrant.
+
+
+---
+
+## Was there a speed benefit? Was magnitude used at all?
+
+Three things get conflated under "the magnitude simplification". Separating
+them, and measuring:
+
+### 1. The magnitude *measure* was never used to compute a hypervolume
+
+`solver.py` runs on `[LEBESGUE] * 4`. The hypervolume **is** the Lebesgue
+specialisation of the product measure, so the atom-at-zero measure plays no part
+in the computation. Nor would the recovery identity
+`HV₄ = 16·Mag − 16 − 8H₁ − 4H₂ − 2H₃` help: it needs `Mag`, which costs what
+`HV₄` costs, *plus* fourteen lower-dimensional projections. It is a validation
+identity, not a shortcut.
+
+Where magnitude did earn its keep is methodological, and it was not small. The
+atom at the anchor makes endpoint errors *visible* that Lebesgue silently
+absorbs. Five separate bugs in this work were caught that way and would
+otherwise have shipped: the branch-1 short-circuit on the anchor prefix, an
+exclusive bound consumed as closed in `cap_u`, a merge key omitting the caps,
+and two inverted region conditions. Every one of them was invisible under
+Lebesgue. As a test oracle, magnitude is worth keeping even if it never appears
+in a production path.
+
+### 2. The product-measure normal form *was* used
+
+The `2+2` prefix machinery does all of the easy-residual integration in
+`solver.py`. That part of the proposal is genuinely exercised.
+
+### 3. No speed benefit — and none is claimed
+
+Spherical fronts, 4-D, seconds:
+
+| `n` | prefix (this work) | Chan d/3 | Chan d/2 | dimension sweep | WFG |
+|---|---|---|---|---|---|
+| 10 | 0.196 | 0.014 | 0.0028 | 0.0005 | 0.0010 |
+| 20 | 0.527 | 0.059 | 0.0143 | 0.0030 | 0.0123 |
+| 40 | 3.338 | 0.284 | 0.0292 | 0.0058 | 0.0218 |
+| 80 | 4.569 | 0.246 | 0.0518 | 0.0138 | 0.0547 |
+
+At `n = 40` the prefix solver is ~240x slower than the dimension sweep, ~12x
+slower than the reference Section-4.2 solver and ~100x slower than Section 2.
+
+**How much of that is the prototype rather than the method?** Most of it, and
+the profile says where: 99% of the time is in `K_decomposed`, which answers each
+prefix query by sweeping the target grid afresh — about 65 target cells per
+query, 84,076 integrand evaluations for 1,296 queries. The cost per query also
+*grows* with the instance (0.37 → 0.42 → 0.91 ms from `n`=10 to 40), so the
+query is not `O(1)`; the report's design says it should be, answered from
+precomputed records with a predecessor search at worst.
+
+So the fair reading is: this measurement does **not** show the method is slow,
+only that no speed benefit has been demonstrated. A faithful implementation
+would build records once per cell and answer queries in `O(1)`, putting
+per-node cost in the same class as the reference Section-4.2 solver — which is
+itself ~50x slower than the dimension sweep on this workload.
+
+That ordering is the thing to keep in view. The report is explicit that it does
+not improve the exponent and offers a simpler simplification step, not a faster
+algorithm. Nothing here contradicts that, and nothing here supports a speed
+claim either. On grounded 4-D hypervolume the practical ranking remains what the
+FastHVChan benchmarks already showed: dimension sweep first, then WFG and
+Chan d/2, with the d/3 family well behind on constants despite the better
+exponent.

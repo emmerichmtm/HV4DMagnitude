@@ -83,8 +83,9 @@ def rand_monotone(rng, grid, values, n_break=2, nonincreasing=True):
     return Step(tuple(xs), tuple(vs))
 
 
-def rand_term(rng, p, n_break=2, density=0.6):
-    grid, values = grid_for(p), values_for(p)
+def rand_term(rng, p, n_break=2, density=0.6, grid=None, values=None):
+    grid = grid or grid_for(p)
+    values = values or values_for(p)
     t = PairTerm(1.0)
     for i in range(p):
         if rng.random() < 0.5:
@@ -199,9 +200,12 @@ def test_breakpoints_along_chain():
     print("Phase 3c: breakpoints per term along the elimination chain")
     rng = random.Random(4242)
     for p in (6, 8):
-        term = rand_term(rng, p, 2)
+        # No oracle here, so the fine grid is usable at every p; the coarse
+        # p=8 grid makes most terms collapse after one elimination and the
+        # trace says nothing.
+        grid = GRID
+        term = rand_term(rng, p, 2, grid=grid, values=VALUES[4])
         axes = list(range(p))
-        grid = grid_for(p)
         measures = {a: LEBESGUE for a in axes}
         domains = {a: DOM for a in axes}
         grids = {a: grid for a in axes}

@@ -17,6 +17,37 @@ step that was open and adopts all four findings into the formal statement.
 what needs correcting in the report, and, most importantly, what is *not*
 verified.
 
+## The structural advantage: the normal form compiles
+
+The most practically useful finding here is not about exponents. The `2+2`
+prefix normal form reduces the inner loop to **flat-array arithmetic with no
+symbolic dispatch** — binary searches and cumulative lookups over `float64`
+arrays, no term objects, no condition dictionaries, no dynamic case
+enumeration. That makes it compilable, and the difference is not a matter of
+effort:
+
+| hot function | numba `nopython` |
+|---|---|
+| `fastkernel.k_prefix` (prefix normal form) | **compiles** |
+| `chan_orthant_dby3.Step.__init__` | `TypingError` |
+| `chan_orthant_dby3.Step._zip` | `TypingError` |
+| `chan_orthant_dby3._eliminate_axis` | `TypingError` |
+
+Chan's generic active-bound elimination manipulates Python objects — step
+functions as tuples, terms as dictionaries of conditions — so it cannot enter
+nopython mode without being rewritten into array form. The prefix formulation
+needs no such rewrite.
+
+Compiled, the prefix solver runs **1.3–1.6× faster than the FastHVChan
+Section-4.2 solver** from `n = 20` upward (n=40: 0.113 s vs 0.186 s), a 9–13×
+gain over its own interpreted path, and bit-identical results.
+
+**The honest qualifier:** that comparison is compiled-against-interpreted. In
+pure Python on both sides the prefix solver is 5.4–7.5× *slower*, so per unit of
+work it still does more. The claim is not "faster algorithm" — it is that this
+formulation is the one that can be compiled at all, and that this is a property
+of the representation rather than of the implementer.
+
 ## Result in one paragraph
 
 No counterexample to any stated lemma survived. The core claim — that the target

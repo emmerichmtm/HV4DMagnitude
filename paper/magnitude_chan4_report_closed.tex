@@ -47,7 +47,8 @@ The hypervolume indicator of a finite approximation set is the volume of a union
 
 This note develops a four-dimensional alternative motivated by the $\ell_1$ magnitude of dominated sets. Magnitude turns an anchored box into a product, and more generally exposes a positive product-measure structure. Pairing the four coordinates as $2+2$ leads to a meet-contraction identity, an exact prefix formula below a strict monotone staircase, and a finite-rank four-prefix normal form. We give a threshold-antiderivative lemma with explicit endpoint semantics and, crucially, an explicit parametric re-expression constructor: after a compressed primitive is multiplied by newly easy one-/two-sided masks and integrated over the next grid cell, every residual comparison is routed into one of four fixed parts of the state (a physical staircase, a latent $u$ cap, a latent $v$ cap, or a one-turn latent boundary). This proves representation-level closure rather than only semantic closure.
 
-The proposed simplification does \emph{not} improve Chan's $4/3$ exponent. If $S$ prefix primitives of total fine complexity $N$ enter a compression and $m$ hard orthants remain, then $S'\le C_4S$ for a dimension-only constant $C_4$, the compressed state uses $O(S'm)$ one-dimensional interval/prefix records, and the conservative rebuild time is $O(S(N+m)\log(N+m))$ (linear after sorting). A registered four-prefix query costs $O(S')$, and one grid-cell integral uses at most $16S'$ primitive-prefix evaluations. Under either the fixed-block schedule used in implementations of Chan's recursion or a locally recomputed $r=N^\delta$ schedule, the primitive multiplicity contributes at most a constant or polylogarithmic factor along a root-to-leaf path. Hence the complete four-dimensional algorithm retains $\wtO(n^{4/3})$ time. The gain is a substantially simpler and more structured simplification step, not a better exponent.
+The proposed simplification does \emph{not} improve Chan's $4/3$ exponent. If $S$ prefix primitives of total fine complexity $N$ enter a compression and $m$ hard orthants remain, then $S'\le C_4S$ for a dimension-only constant $C_4$, the compressed state uses $O(S'm)$ one-dimensional interval/prefix records, and the conservative rebuild time is $O(S(N+m)\log(N+m))$ (linear after sorting). A registered four-prefix query costs $O(S')$, and one grid-cell integral uses at most $16S'$ primitive-prefix evaluations. Under either the fixed-block schedule used in implementations of Chan's recursion or a locally recomputed $r=N^\delta$ schedule, the primitive multiplicity contributes at most a constant or polylogarithmic factor along a root-to-leaf path. Hence the complete four-dimensional algorithm retains $\wtO(n^{4/3})$ time. The gain is a substantially simpler and more structured simplification step, not a better exponent.  A further, practical consequence is recorded in Section~
+ef{sec:compiles}: the normal form's inner loop is flat-array arithmetic with no symbolic dispatch, so unlike generic active-bound elimination it admits just-in-time compilation without redesign, which is a property of the representation rather than of any implementation.
 \end{abstract}
 
 \section{Two views of the same problem}
@@ -577,6 +578,62 @@ and hence
 \boxed{T(N)=\widetilde O(N^{4/3}).}                            \label{eq:newtime}
 \end{equation}
 The theorem is a simplification of Chan's symbolic machinery, not a better exponent.  Per compression and per incoming primitive the state is genuinely $O(m)$; across a complete recursive path the safe bound is $O(m)$ times the accumulated primitive multiplicity described above.
+
+\section{A structural consequence: the normal form compiles}
+\label{sec:compiles}
+
+Beyond the proof-level simplification, the $2+2$ normal form has a practical
+property that the generic machinery does not, and it is worth stating because it
+is a property of the \emph{representation} rather than of any particular
+implementation.
+
+Chan's active-bound elimination manipulates symbolic objects: step functions
+carrying variable-length breakpoint lists, terms carrying dictionaries of
+conditions keyed by axis pairs, orientations and senses, and a case enumeration
+that branches on their contents. Every inner operation is dynamically typed and
+allocates.
+
+The prefix normal form, once its staircases are unpacked, reduces the inner loop
+to arithmetic on flat numeric arrays: binary searches for generalized inverses,
+predecessor searches into cumulative interval records, and a constant-size
+branch test. No symbolic dispatch occurs at any point.
+
+The difference is observable rather than rhetorical. Applying a just-in-time
+compiler (\texttt{numba}, \texttt{nopython} mode) to the hot path of each, as
+identified by profiling a grounded four-dimensional instance with $n=80$:
+
+\begin{center}
+\begin{tabular}{lrl}
+\toprule
+function & calls at $n=80$ & \texttt{nopython} \\
+\midrule
+\texttt{Step.\_\_init\_\_} (symbolic engine) & 42\,847 & \texttt{TypingError} \\
+\texttt{Step.\_zip} (symbolic engine)        & 10\,824 & \texttt{TypingError} \\
+\texttt{\_eliminate\_axis} (symbolic engine) &  2\,050 & \texttt{TypingError} \\
+four-prefix kernel (this note)               & ---     & \textbf{compiles} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Those three functions account for most of the symbolic solver's running time,
+and they fail for one reason: nothing in them has a static numeric type.
+Compiling that machinery would require rewriting its core into array form, which
+is substantially the work the prefix formulation already performs.
+
+Compiled, a prototype grounded four-dimensional solver built on the normal form
+runs $1.3$--$1.6$ times faster than the reference Section-4.2 implementation for
+$n\ge20$ (at $n=40$, $0.113$\,s against $0.186$\,s), a $9$--$13\times$ gain over
+its own interpreted path, with bit-identical results.
+
+Two qualifications belong with that figure. First, it compares a compiled
+implementation against an interpreted one; run in pure Python on both sides the
+prefix prototype is $5$--$8$ times \emph{slower}, so per unit of work it still
+does more. Second, neither solver is competitive on this workload with a
+dimension sweep, which remains roughly an order of magnitude faster again. The
+claim is therefore narrow and specific: this formulation is the one that admits
+compilation without redesign, and that follows from the $2+2$ structure rather
+than from implementation effort.
+
 
 \section{Mapping to \texttt{FastHVChan}}
 

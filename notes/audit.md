@@ -659,3 +659,34 @@ Against the practical algorithms the ordering is unchanged: at `n = 40` the
 compiled prefix solver is still ~3.6x slower than Section 2 and ~20x slower than
 the dimension sweep, both of which are pure Python and would themselves gain
 from compilation.
+
+
+### Compilability is structural, not a matter of effort
+
+The obvious objection to the table above is that only one side was compiled. So
+the other side was tried. Running numba's `nopython` mode over the hot path of
+the Section-4.2 solver, identified by profiling at `n = 80`:
+
+| function | calls at n=80 | numba `nopython` |
+|---|---|---|
+| `Step.__init__` | 42,847 | `TypingError` |
+| `Step._zip` | 10,824 | `TypingError` |
+| `_eliminate_axis` | 2,050 | `TypingError` |
+| `fastkernel.k_prefix` (this work) | — | **compiles** |
+
+Those three account for most of the solver's time, and they fail for the same
+reason: they manipulate Python objects. A `Step` is a pair of tuples built and
+canonicalised on every construction; a `Term` is a dictionary keyed by
+`(axis, axis, sense, bucket)` tuples holding `Step` values; `_eliminate_axis`
+builds and clones lists of such terms while branching on their contents.
+Nothing there has a static numeric type, so nopython mode cannot see it.
+
+Compiling Chan's symbolic machinery would therefore mean rewriting its core
+into array form -- which is close to the work this prototype did, by a
+different route.
+
+This is the strongest practical statement the exercise supports, and it is
+worth separating from the speed numbers: the `2+2` normal form's inner loop is
+flat-array arithmetic, and the generic active-bound elimination's is not. That
+difference is a property of the two representations, not of how much effort was
+spent on either implementation.

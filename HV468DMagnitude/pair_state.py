@@ -136,22 +136,64 @@ class PairPredicate:
 
 @dataclass
 class PairTerm:
-    """One weighted monotone-pair term."""
+    """One weighted monotone-pair term.
+
+    The weight on an axis has **two** components, because the magnitude measure
+    does: ``mu_M = delta_0 + (1/2) lambda``.  ``weights[axis]`` is the density
+    against the continuous part, and ``atoms[axis]`` the weight at the anchor
+    point ``0``, stored absolutely rather than as a multiplier.  When no atom
+    weight is recorded the default is ``1.0``, so a term that never touches the
+    anchor behaves exactly as before.
+
+    Why they have to be independent
+    -------------------------------
+    A right-continuous ``Step`` cannot distinguish the single point ``0`` from
+    the interval ``[0, x_0)``, so with one component the indicators ``[xi = 0]``
+    and ``[xi > 0]`` are both inexpressible.  Those two are precisely what
+    decorated inversion needs: inverting a non-strict upper or a strict lower
+    predicate gives a bound that is *left*-continuous in the surviving
+    variable, which a right-continuous step can represent everywhere except at
+    its jumps -- and the jump at ``0`` is the one that carries mass, since the
+    magnitude atom there has mass 1 while every other single point has mass 0.
+    Splitting the weight lets that one point be carried exactly instead of
+    approximated.
+
+    Under Lebesgue ``atom0 = 0`` and the whole mechanism is inert, which is why
+    this was invisible until the magnitude oracle was run against mixed
+    strict/non-strict predicates.
+    """
 
     coeff: float = 1.0
     weights: Dict[int, Step] = field(default_factory=dict)
     preds: List[PairPredicate] = field(default_factory=list)
+    atoms: Dict[int, float] = field(default_factory=dict)
 
     def clone(self) -> "PairTerm":
-        return PairTerm(self.coeff, dict(self.weights), list(self.preds))
+        return PairTerm(self.coeff, dict(self.weights), list(self.preds),
+                        dict(self.atoms))
+
+    def atom_weight(self, axis: int) -> float:
+        return self.atoms.get(axis, 1.0)
 
     def value_at(self, point: Sequence[float]) -> float:
-        """Evaluate the integrand at a point (used only by the oracles)."""
+        """Evaluate the integrand at a point (used only by the oracles).
+
+        At ``point[axis] == 0`` the atom weight is used in place of the step,
+        which is what makes the oracle agree with the split representation.
+        The oracle gives the anchor its own cell with representative exactly
+        ``0.0``, so this branch is hit precisely on the atom.
+        """
         v = self.coeff
         if v == 0.0:
             return 0.0
-        for axis, w in self.weights.items():
-            v *= w(point[axis])
+        for axis in set(self.weights) | set(self.atoms):
+            t = point[axis]
+            if t == 0.0:
+                v *= self.atom_weight(axis)
+            else:
+                w = self.weights.get(axis)
+                if w is not None:
+                    v *= w(t)
             if v == 0.0:
                 return 0.0
         for p in self.preds:
@@ -160,11 +202,30 @@ class PairTerm:
         return v
 
     def mul_weight(self, axis: int, s: Step) -> None:
+        """Multiply in a weight that is an ordinary function of the axis.
+
+        A ``Step`` is right-continuous, so ``s(0.0)`` *is* its value at the
+        anchor; both components are scaled accordingly.
+        """
         cur = self.weights.get(axis)
         self.weights[axis] = s if cur is None else _mul(cur, s)
+        self.atoms[axis] = self.atom_weight(axis) * s(0.0)
+
+    def mul_split(self, axis: int, atom_mult: float,
+                  step: Optional[Step] = None) -> None:
+        """Multiply the atom and the continuous part by different factors.
+
+        This is the operation an ordinary weight cannot perform: ``[xi > 0]`` is
+        ``mul_split(axis, 0.0, step_const(1.0))`` and ``[xi == 0]`` is
+        ``mul_split(axis, 1.0, step_const(0.0))``.
+        """
+        self.atoms[axis] = self.atom_weight(axis) * atom_mult
+        if step is not None:
+            cur = self.weights.get(axis)
+            self.weights[axis] = step if cur is None else _mul(cur, step)
 
     def variables(self) -> List[int]:
-        out = set(self.weights)
+        out = set(self.weights) | set(self.atoms)
         for p in self.preds:
             out.add(p.i)
             out.add(p.j)
@@ -176,9 +237,20 @@ class PairTerm:
         return n
 
     def is_dead(self) -> bool:
+        """True only when the term is identically zero.
+
+        An axis whose continuous density vanishes is *not* enough: the anchor
+        atom may still carry weight, and under magnitude that is mass 1.  The
+        axis is dead only when both components vanish.
+        """
         if self.coeff == 0.0:
             return True
-        return any(all(v == 0.0 for v in w.vs) for w in self.weights.values())
+        for axis in set(self.weights) | set(self.atoms):
+            w = self.weights.get(axis)
+            step_dead = w is not None and all(v == 0.0 for v in w.vs)
+            if step_dead and self.atom_weight(axis) == 0.0:
+                return True
+        return False
 
 
 def _mul(a: Step, b: Step) -> Step:

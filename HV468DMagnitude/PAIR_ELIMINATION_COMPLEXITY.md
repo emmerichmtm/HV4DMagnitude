@@ -213,6 +213,7 @@ constructor could not digest its own output.
 | 4 | Lebesgue | 2735 → 2325 | 175153 → 4866 | 2.1× |
 | 4 | Lebesgue | 1225 → 1075 | 54131 → 114 | 0.1× |
 | 4 | magnitude | 3985 → 2805 | 193468 → 11341 | 4.0× |
+| 4 | magnitude | 3850 → 1600 | 76285 → 1002 | 0.63× |
 
 And at `d = 6`, with `G1` at 3 cells per axis collapsing to `G2` at 2, checked
 on all 64 coarse cells:

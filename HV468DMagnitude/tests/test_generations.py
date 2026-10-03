@@ -216,10 +216,12 @@ def test_two_generations():
     for d in (2, 3):
         run(d, LEBESGUE, 0.4, 2, term_cap=400000)
         run(d, MAGNITUDE, 0.4, 2, term_cap=400000)
-    # one instance per measure at d=4: the second generation there runs to
-    # ~2 x 10^5 raw terms and takes minutes
-    run(4, LEBESGUE, 0.4, 1, term_cap=400000)
-    run(4, MAGNITUDE, 0.4, 1, term_cap=400000)
+    # two instances per measure at d=4, so that every figure quoted in
+    # PAIR_ELIMINATION_COMPLEXITY.md and AUDIT_RESPONSE.md is reproducible from
+    # this suite.  The second generation there runs to ~2 x 10^5 raw terms, so
+    # each instance costs about four minutes.
+    run(4, LEBESGUE, 0.4, 2, term_cap=400000)
+    run(4, MAGNITUDE, 0.4, 2, term_cap=400000)
 
 
 #: a coarser fine-grid for d = 6, so the first generation stays affordable

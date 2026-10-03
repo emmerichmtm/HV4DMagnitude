@@ -119,7 +119,7 @@ branch products never exceed 64.
 python tests/test_elimination.py
 python tests/test_valley.py
 python tests/test_compression.py     # d = 6 takes about 3 minutes
-python tests/test_generations.py      # two generations; d = 4 and 6 are slow
+python tests/test_generations.py      # two generations; about 26 minutes
 python complexity_probe.py
 ```
 

@@ -14,6 +14,8 @@ every shape — hills, valleys, zigzags — through `p = 7`. **Compression in `2
 variables is now built and exact at `d = 4` and `d = 6`.** Five blocking defects
 in the report's written statements were found and repaired to get there.
 
+* [`AUDIT_RESPONSE.md`](AUDIT_RESPONSE.md) — the audit written as a response to
+  the paper: what to change, where, and the measurement behind each item
 * [`notes/REPORT_PROBLEMS.md`](notes/REPORT_PROBLEMS.md) — itemized problems
   with the report, by severity
 * [`notes/PAIR_ELIMINATION_AUDIT.md`](notes/PAIR_ELIMINATION_AUDIT.md) — the

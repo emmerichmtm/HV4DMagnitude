@@ -231,9 +231,18 @@ def _samples_for(breaks: Sequence[float],
     ``(0, breaks[0])``, and sampling at ``0`` would spread the single-point
     value across the whole piece -- an error of full measure, not a
     measure-zero one.
+
+    The degenerate case needs the same treatment and is easy to miss: with no
+    breakpoints at all the single piece is ``[0, inf)``, whose interior is
+    ``(0, inf)``.  Any positive representative does, because the function is
+    constant there; returning ``0`` instead would describe the anchor and claim
+    it holds everywhere.  That is exactly how a constant bound ``f == 0`` --
+    the constraint ``x_j <= 0`` -- came to be read as "every ``x`` is feasible"
+    for every ``x_j``, inventing mass on cells where the term is identically
+    zero.
     """
     if not breaks:
-        return [0.0]
+        return [1.0 if interior else 0.0]
     out = [0.5 * breaks[0] if interior else 0.0]      # the piece [0, breaks[0])
     for a, b in zip(breaks, breaks[1:]):
         out.append(0.5 * (a + b))

@@ -106,6 +106,10 @@ class Counters:
         self.peak_state = 0
         self.max_runs = 0
         self.max_combos = 0
+        #: terms emitted by a whole-state compression before any merging; this
+        #: is the quantity the C_d S bound is about, and it is not the length
+        #: of the returned state once incremental merging is switched on
+        self.raw_emitted = 0
 
     def record(self, produced: int, labels: int) -> None:
         self.terms_in += 1

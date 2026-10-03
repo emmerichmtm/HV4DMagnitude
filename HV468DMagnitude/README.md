@@ -117,6 +117,7 @@ branch products never exceed 64.
 python tests/test_elimination.py
 python tests/test_valley.py
 python tests/test_compression.py     # d = 6 takes about 3 minutes
+python tests/test_generations.py      # two generations; d = 4 and 6 are slow
 python complexity_probe.py
 ```
 
@@ -133,6 +134,7 @@ complexity_probe.py       branching vs instance size, and vs dimension
 tests/test_elimination.py elimination against the oracles
 tests/test_valley.py      non-monotone boundaries, run decomposition
 tests/test_compression.py compression against the conditional expectation
+tests/test_generations.py two generations on nested grids (tower property)
 notes/                    the audit, the problems list, and the task prompt
 ```
 

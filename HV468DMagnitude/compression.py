@@ -58,7 +58,7 @@ from pair_state import PairPredicate, PairTerm
 __all__ = ["CompressionGrid", "build_compression_term", "compress",
            "numerator_at", "denominator_at", "conditional_at", "cell_indices",
            "reciprocal_mass_step", "divide_by_cell_mass", "merge_terms",
-           "reindex_to_physical"]
+           "reindex_to_physical", "compress_state", "next_generation"]
 
 
 @dataclass
@@ -272,6 +272,81 @@ def reindex_to_physical(terms: Sequence[PairTerm], d: int) -> List[PairTerm]:
                                          p.strict))
         out.append(s)
     return out
+
+
+def compress_state(terms: Sequence[PairTerm], d: int,
+                   measures: Dict[int, Measure1D],
+                   domains: Dict[int, Tuple[float, float]],
+                   grids: Sequence[CompressionGrid],
+                   event_grids: Dict[int, Sequence[float]],
+                   counters: Optional[Counters] = None,
+                   term_cap: Optional[int] = None,
+                   merge_every: Optional[int] = 20000
+                   ) -> Optional[List[PairTerm]]:
+    """Compress a whole signed state, one incoming term at a time.
+
+    ``\\ref{thm:generalsimplification}`` bounds the output by ``C_d S``, so this
+    is where the constant compounds: a state of ``S`` terms becomes ``S``
+    independent compressions whose outputs are concatenated.  The ``term_cap``
+    is checked across the accumulated output, not per term, because that is the
+    quantity that actually has to fit in memory.
+    """
+    out: List[PairTerm] = []
+    raw_total = 0
+    for t in terms:
+        got = compress(t, d, measures, domains, grids, event_grids, counters,
+                       term_cap=term_cap)
+        if got is None:
+            return None
+        raw_total += len(got)
+        out.extend(got)
+        # Merge as we go, not at the end.  Every function in the output is
+        # measurable in the new grid, so the number of *distinct* terms the
+        # output can contain is capped by the grid's resolution, while the raw
+        # count is not.  Folding each contribution in immediately therefore
+        # bounds memory by the merged size, which is what makes a second
+        # generation reachable at all.
+        if merge_every and len(out) >= merge_every:
+            out = merge_terms(out)
+        if term_cap is not None and len(out) > term_cap:
+            return None
+    if merge_every:
+        out = merge_terms(out)
+    if counters is not None:
+        counters.raw_emitted = getattr(counters, "raw_emitted", 0) + raw_total
+    return out
+
+
+def next_generation(terms: Sequence[PairTerm], d: int,
+                    measures: Dict[int, Measure1D],
+                    domains: Dict[int, Tuple[float, float]],
+                    grids: Sequence[CompressionGrid],
+                    event_grids: Dict[int, Sequence[float]],
+                    counters: Optional[Counters] = None,
+                    term_cap: Optional[int] = None,
+                    merge: bool = True,
+                    merge_every: Optional[int] = 20000):
+    """One full compression generation: compress, normalize, relabel.
+
+    Returns ``(state, raw_count)`` where ``state`` is in the *physical* axes
+    ``0..d-1`` and so can be fed straight back in, or ``(None, raw)`` if the
+    construction abstained or exceeded the cap.  ``raw_count`` is the output
+    size before merging, which is the number the ``C_d S`` bound is about.
+    """
+    if counters is not None:
+        counters.raw_emitted = 0
+    raw = compress_state(terms, d, measures, domains, grids, event_grids,
+                         counters, term_cap=term_cap, merge_every=merge_every)
+    if raw is None:
+        return None, None
+    # the true pre-merge count, which is what the C_d S bound is about; it is
+    # not len(raw) any more once incremental merging is on
+    n_raw = getattr(counters, "raw_emitted", len(raw)) if counters else len(raw)
+    bar = divide_by_cell_mass(raw, d, grids, measures, domains)
+    state = reindex_to_physical(bar, d)
+    if merge:
+        state = merge_terms(state)
+    return state, n_raw
 
 
 def cell_indices(d: int, grids: Sequence[CompressionGrid]):

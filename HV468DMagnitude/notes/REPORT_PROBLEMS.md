@@ -239,19 +239,49 @@ p = 8:  22.0 -> 20.5 -> 20.2 -> 15.6 -> 12.4 -> 6.5 -> 1.0 -> 0
 Monotone decrease throughout, so the concern does not materialize. The report
 should say why, not leave it to the reader to worry about.
 
-### G3. `C_d` is left implicit where it compounds
+### G3. `C_d` is left implicit — and it is the wrong quantity to bound
 
 `\label{thm:generalsimplification}` gives `S' <= C_d S` with `C_d` a product of
-`B_p` along the chain, `p <= 2d`. With the remark's own `B_p = 2^{O(p^2)}`, this
-is `C_d = 2^{O(d^3)}`. The report should write that down, because
+`B_p` along the chain, `p <= 2d`. With the remark's own `B_p = 2^{O(p^2)}` that
+is `C_d = 2^{O(d^3)}`, which the report should write down, because
 `\label{prop:complexity}` already concedes that "nothing in the current argument
 proves that a signed sum of distinct rank-one/one-turn primitives can always be
-canonically merged back to a constant number" — so `C_d` compounds across
-compression *generations*, not only within one, and at `2^{O(d^3)}` that caveat
-is doing much more work in the general theorem than in the 4-D one.
+canonically merged back to a constant number".
 
-Peak state size at fixed resolution, as `p` grows: 2, 6, 6, 14, 26, 89, 499 for
-`p = 2..8`. The branching constant is modest; the *state* is what grows.
+That concession is justified. Measured from one incoming term: 450 output terms
+at `d = 4` and 78305 at `d = 6`, with canonical merging — adding the
+coefficients of identical terms, the only geometry-free merge available —
+recovering just 4.3x to 4.5x. `C_d` is large and does not merge away.
+
+But `C_d` is not the quantity that governs *repeated* compression, and the
+report does not distinguish the two. Across two generations on nested grids the
+**merged state** holds steady, and at `d = 6` it shrinks:
+
+| d | gen 1 merged | gen 2 raw | gen 2 merged | growth |
+|---|---|---|---|---|
+| 4 | 2325 | 175153 | 4866 | 2.1x |
+| 6 | 3120 | 602140 | **1296** | **0.42x** |
+| 6 | 7110 | 978120 | **4473** | **0.63x** |
+
+The raw emission reaches 464x the merged size. The reason is structural: after
+compression on `G2` every function in the state is `G2`-measurable, so the
+number of *distinct* terms the state can hold is capped by the grid's
+resolution while the number emitted is not — and a coarser `G2` admits fewer
+distinct terms than `G1`, which is why `d = 6` shrinks rather than merely
+holding steady.
+
+**Fix.** Separate the two quantities. `C_d` bounds what one compression
+*emits*; what the recursion needs bounded is what the state *holds*, which is a
+function of grid resolution. Say that merging is part of the construction
+rather than an implementation detail, and that it has to be applied
+incrementally — fold each contribution in as it is produced — or memory is
+bounded by the raw count and a second generation is unreachable. The missing
+argument, a bound on the number of distinct `G`-measurable terms, looks far
+more tractable than a bound on `C_d`, and it is what the theorem actually
+needs.
+
+I reported the pessimistic reading of this before measuring the second
+generation, and it was wrong: `C_d` does not compound.
 
 ---
 

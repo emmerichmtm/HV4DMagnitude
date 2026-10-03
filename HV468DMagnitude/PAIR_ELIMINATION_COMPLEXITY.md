@@ -165,6 +165,104 @@ The asymptotics are untouched: `C_d` is independent of instance size, which is
 what the recurrence needs. This is a statement about the constant, not the
 exponent.
 
+## Two generations: the recursion claim
+
+The report's closure claim is not that one compression works but that the
+output can be used *recursively*. The checkable form is the tower property.
+Take a grid `G1` and a coarser `G2` whose boundaries are a subset of `G1`'s, so
+`G2` is an admissible descendant and every `G2` cell is a union of `G1` cells.
+Then the indicator of a `G2` cell is `G1`-measurable, so
+
+```
+integral over C2 of E[F | G1]  ==  integral over C2 of F
+```
+
+and compressing `E[F | G1]` on `G2` must give exactly what compressing the
+original `F` on `G2` would. Two checks, kept apart because they fail for
+different reasons:
+
+* **carry** — the oracle integral of the generation-1 state over a coarse cell
+  equals that of `F`. Tests generation 1's *output*, with no second elimination
+  involved.
+* **chain** — two generations give `E[F | G2]` on every coarse cell. Tests
+  generation 2's elimination on input produced by the machine rather than by a
+  generator.
+
+Both pass at every `d` tested. `carry` and `chain` both run under both
+measures at `d = 2, 3, 4`; at `d = 6` only `chain` is run, on all 64 cells,
+under both measures — `carry` integrates the whole generation-1 state cell by
+cell, which costs minutes per cell at 7000 terms, and the check is already
+covered at lower `d`. A failure in `carry` but not
+`chain` would have meant generation 1 was wrong; the reverse, that the
+constructor could not digest its own output.
+
+### State size across generations
+
+`G1` with 4 cells per axis collapsing to `G2` with 2, one incoming term:
+
+| d | measure | gen 1 raw → merged | gen 2 raw → merged | merged growth |
+|---|---|---|---|---|
+| 2 | Lebesgue | 41 → 41 | 401 → 92 | 2.2× |
+| 2 | Lebesgue | 49 → 45 | 332 → 30 | 0.7× |
+| 2 | magnitude | 41 → 41 | 401 → 128 | 3.1× |
+| 2 | magnitude | 74 → 54 | 369 → 57 | 1.1× |
+| 3 | Lebesgue | 456 → 270 | 4010 → 339 | 1.3× |
+| 3 | Lebesgue | 290 → 260 | 2992 → 118 | 0.5× |
+| 3 | magnitude | 456 → 274 | 4038 → 468 | 1.7× |
+| 3 | magnitude | 290 → 270 | 3058 → 231 | 0.9× |
+| 4 | Lebesgue | 2735 → 2325 | 175153 → 4866 | 2.1× |
+| 4 | Lebesgue | 1225 → 1075 | 54131 → 114 | 0.1× |
+| 4 | magnitude | 3985 → 2805 | 193468 → 11341 | 4.0× |
+
+And at `d = 6`, with `G1` at 3 cells per axis collapsing to `G2` at 2, checked
+on all 64 coarse cells:
+
+| d | measure | gen 1 raw → merged | gen 2 raw → merged | merged growth |
+|---|---|---|---|---|
+| 6 | Lebesgue | 8330 → 3120 | 602140 → **1296** | **0.42×** |
+| 6 | magnitude | 31080 → 7110 | 978120 → **4473** | **0.63×** |
+
+The state *shrank* under both measures, while the raw emission ran to 138–464×
+the merged size.
+
+**This is the result that changes the picture.** The raw count grows by one to
+three orders of magnitude per generation — 31080 to 978120 at `d = 6` — but
+after canonical merging the state returns to roughly its previous size, and at
+`d = 6` it *shrank*. Merged growth across a generation is 0.1× to 4.0×, not
+10³.
+
+The reason is structural, and it is worth stating in the paper. After
+compression on `G2` every function in the state is measurable with respect to
+`G2`. So the number of *distinct* terms the output can contain is capped by the
+grid's resolution, while the number of terms the construction *emits* is not.
+Since `G2` is coarser than `G1`, it admits *fewer* distinct terms — which is
+why the `d = 6` state shrinks rather than merely holding steady. Merging is not
+an optimization here; it is what keeps the representation honest about its own
+information content, and the grid is what bounds it.
+
+This does not prove a bound. It says the quantity `\ref{prop:complexity}`
+worries about is governed by grid resolution rather than by `C_d`, which is a
+different and much more tractable thing to bound — and it is the argument the
+paper is currently missing.
+
+That also means merging should be applied **incrementally**, folding each
+contribution in as it is produced rather than at the end. Memory is then bounded
+by the merged size, which is what makes a second generation reachable at all;
+`compress_state` does this.
+
+### Cost per term collapses after the first generation
+
+A corollary worth recording because the naive projection is badly wrong. At
+`d = 6`, compressing the *original* `F` emits ~78305 terms. Projecting a second
+generation by multiplying that by the generation-1 state size gives ~3 x 10^9
+terms and an estimate of weeks, which is what I first calculated and it is
+wrong. Measured instead: a generation-1 term at `d = 6` compresses to **27 to
+81** raw terms, because its predicates are already grid-aligned and coarse.
+The second generation is minutes, not weeks.
+
+So `C_d` measured on a hand-written `F` is an upper bound that the recursion
+never pays again. The expensive compression is the first one.
+
 ## Growth in instance size — the claim that matters
 
 The report's constant must not depend on `N`, the number of staircase

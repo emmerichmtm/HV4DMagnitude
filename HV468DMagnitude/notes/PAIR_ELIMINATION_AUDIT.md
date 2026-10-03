@@ -242,7 +242,53 @@ be large if the generic label enumeration is implemented literally" is right and
 understated; its advice to keep a specialized base case is a requirement, not a
 convenience.
 
-## Finding 10 — the oracle has to be grid-aligned in values, not just breakpoints
+## Finding 10 — `C_d` does not compound across generations, and why
+
+The pessimistic reading of Finding 9 was wrong, and worth correcting explicitly
+because I reported it before measuring it.
+
+Two generations on nested grids -- `G2` coarser than `G1`, so each `G2` cell is
+a union of `G1` cells and the tower property applies -- were run at
+`d = 2, 3, 4` and `d = 6`, under both measures, and agree exactly with
+compressing the original `F` on `G2` directly.
+
+The state sizes:
+
+| d | gen 1 raw -> merged | gen 2 raw -> merged | merged growth |
+|---|---|---|---|
+| 2 | 41 -> 41 | 401 -> 92 | 2.2x |
+| 3 | 456 -> 270 | 4010 -> 339 | 1.3x |
+| 4 | 2735 -> 2325 | 175153 -> 4866 | 2.1x |
+| 4 | 1225 -> 1075 | 54131 -> 114 | 0.1x |
+| 6 | 8330 -> 3120 | 602140 -> **1296** | **0.42x** |
+| 6 | 31080 -> 7110 | 978120 -> **4473** | **0.63x** |
+
+The raw emission grows by up to three orders of magnitude per generation, but
+the merged state returns to roughly its previous size and at `d = 6` *shrinks*
+under both measures. So `C_d` bounds what the construction emits, not what the
+state holds, and at `d = 6` the two differ by a factor of 138 to 464.
+
+The reason is structural and belongs in the paper. After compression on `G2`
+every function in the state is `G2`-measurable, so the number of *distinct*
+terms the output can contain is capped by the grid's resolution while the number
+emitted is not; and `G2`, being coarser, admits fewer distinct terms than `G1`.
+Merging is therefore not an optimization but the step that keeps the
+representation honest about its own information content, and it must be applied
+*incrementally* -- folding each contribution in as it is produced -- or memory
+is bounded by the raw count and a second generation is unreachable.
+
+A corollary, recorded because the naive projection is badly wrong and I made
+it: the expensive compression is the **first** one. A generation-1 term at
+`d = 6` compresses to 27-81 raw terms rather than 78305, because its predicates
+are already grid-aligned and coarse. Projecting generation 2 by multiplying the
+generation-1 state size by the first generation's `C_d` gave ~3 x 10^9 terms and
+an estimate of weeks; the measured run is minutes.
+
+This does not prove a bound. It relocates the thing to be bounded, from `C_d`
+to grid resolution, which is far more tractable -- and that relocation is the
+argument `\ref{prop:complexity}` is missing.
+
+## Finding 11 — the oracle has to be grid-aligned in values, not just breakpoints
 
 Not a report defect; a methodology note that cost real time twice across the two
 sprints. The oracle evaluates one representative per cell, which is exact only
@@ -279,21 +325,20 @@ because it makes the general argument rest on the simpler lemma.
 
 ## What would close the rest
 
-1. **Multi-generation closure above `d = 4`.** One generation is verified at
-   `d = 6` and the output is structurally ready to feed back in, but a second
-   generation has not been run. With `C_6` around `4 x 10^4` per incoming term,
-   this is the measurement most likely to show where the construction stops
-   being practical.
-2. Compression at `d = 8`, which needs `p = 16`.
-3. A real merge. Canonical merging recovers only ~4.5x; whether a
-   geometry-aware merge does better is the open question that decides whether
-   repeated compression is viable at all.
+1. Compression at `d = 8`, which needs `p = 16`.
+2. More than two generations, and a grid chain of realistic depth. Two
+   generations behave well; nothing here shows what happens after ten.
+3. A merge that is cheaper than the canonical one, which is quadratic in the
+   state size as written. The canonical merge turns out to be *sufficient* for
+   keeping the state bounded across generations, so the open question is now
+   its cost, not its power.
 4. FastHVChan backend behind a `compression_backend` flag.
 
 The honest statement is now: **the elimination calculus is validated to
-`p = 12`, the static chain for `d <= 8`, and compression for `d <= 6` -- for a
-single generation.** What is not established is that the state stays bounded
-across generations, and the measured `C_d` is the reason to doubt it.
+`p = 12`, the static chain for `d <= 8`, and compression for `d <= 6` through
+two generations.** The state does not blow up across a generation; what is not
+established is a *bound*, or what happens after ten generations rather than
+two.
 
 Of the eight genuine bugs across these sprints, **five were invisible under
 Lebesgue and exposed only by magnitude** — every one an endpoint or atom error

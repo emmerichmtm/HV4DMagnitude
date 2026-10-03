@@ -15,7 +15,12 @@ variables is now built and exact at `d = 4` and `d = 6`.** Five blocking defects
 in the report's written statements were found and repaired to get there.
 
 * [`AUDIT_RESPONSE.md`](AUDIT_RESPONSE.md) — the audit written as a response to
-  the paper: what to change, where, and the measurement behind each item
+  the paper: what to change, where, the measurement behind each item, and a
+  table of where the revision answered each one
+
+The revised paper is `paper/magnitude_chan_pair_elimination_report_audited.tex`
+and `.pdf`; it addresses every item. The pre-revision version is kept beside it,
+because the audit documents quote that text.
 * [`notes/REPORT_PROBLEMS.md`](notes/REPORT_PROBLEMS.md) — itemized problems
   with the report, by severity
 * [`notes/PAIR_ELIMINATION_AUDIT.md`](notes/PAIR_ELIMINATION_AUDIT.md) — the

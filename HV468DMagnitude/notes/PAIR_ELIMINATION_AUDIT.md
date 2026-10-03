@@ -1,5 +1,11 @@
 # Audit: the general pair-elimination simplification
 
+> **The report defects recorded here are addressed in the revised report**
+> (`paper/magnitude_chan_pair_elimination_report_audited.tex`). The findings
+> below describe the *pre-revision* text and the implementation work they
+> prompted, in the order they were found. See `AUDIT_RESPONSE.md` for the
+> resolution table.
+
 Report audited: *A Product-Measure and Magnitude Simplification of Chan's
 Hypervolume Algorithm* — generalized version with Section "General
 fixed-dimensional pair elimination"

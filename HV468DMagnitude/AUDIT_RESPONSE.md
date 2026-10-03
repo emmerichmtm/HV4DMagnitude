@@ -9,6 +9,55 @@ below is backed by a run against an exact oracle, and the numbers are
 reproducible from the repository. Where I disagree with the text I say what to
 write instead.
 
+**Status: all items below are addressed in the revised report**
+(`paper/magnitude_chan_pair_elimination_report_audited.tex`). The sections
+R1–R6, M1, G1–G2 and E1–E3 describe the *pre-revision* text and are kept as the
+record of what was found and why; the table immediately below says where each
+one was answered. The pre-revision file is kept alongside the revision so the
+two can be compared.
+
+---
+
+## Where each item was answered in the revision
+
+| # | item | how the revision addresses it |
+|---|---|---|
+| R1 | Definition 1 not closed | Definition renamed *Bounded decorated pair-list term*, carrying a list bound `kappa` per ordered pair |
+| R2 | inversion is a union of runs | new subsection *Decorated run inversion* plus the remark *Compact nonmonotone boundaries*: finite union, split by run index, degenerate padding, branches expand over run choices |
+| R3 | EMPTY has no safe encoding | convention 1, "EMPTY is not zero": empty run as `[c, c)`, and `sup` of the empty set never represented by the anchor |
+| R4 | label partition ties | first-winner rule written out explicitly — strict against earlier candidates, non-strict against later — and asserted disjoint and exhaustive |
+| R5 | left-continuous inversion; anchor weight | split unary weight `q_i^{(0)}`, `q_i^{(+)}` in the definition, plus convention 3, "the anchor is a separate weight component" |
+| R6 | left-open cell family | *Endpoint and cell convention*: right-open cells `[g_j, g_{j+1}) ∩ [0, M]` with a sentinel boundary above the ceiling |
+| M1 | Theorem 3 bounds the wrong quantity | `C_d^{emit}` separated from `S_hold`; theorem retitled *One-compression product-measure closure*; new paragraph *Raw emission versus held state* |
+| G1 | `B_p` independence asserted | the bounded-grammar argument is given: candidate count, label count, run choices and cumulative pieces per label are each grammar-bounded |
+| G2 | breakpoint growth along the chain | new remark *Breakpoint complexity along an elimination chain* |
+| E1 | Lemma 2 redundant for closure | pair elimination demoted from Lemma to **Corollary** of one-variable elimination |
+| E2 | ceiling clamp and its scope | convention 4: infinite bounds keep their ordering meaning in comparisons and are clamped only at measure evaluation |
+| E3 | validation status stale | new paragraph *Current computational validation*, scoped to what was actually run |
+
+Two things the revision adds that I had not proposed, and both are improvements.
+
+**The generation count is bounded.** M1 asked for a bound on the held state and
+I expected that to be the hard part. The revision instead observes that under
+the fixed-block Chan schedule only `O_{d,delta}(1)` generic compression
+generations occur on a root-to-leaf macro-phase, so even the *raw* bound
+compounds into a dimension constant and the asymptotic recurrence is unaffected.
+That closes M1 without needing the grid-resolution bound at all. The bound on
+`S_hold` is still worth having for practice, and the revision correctly declines
+to claim it.
+
+**The oracle lesson is stated in both directions.** The new remark *Magnitude as
+a verification oracle* records both halves: most endpoint bugs were
+magnitude-only, but one decorated-comparison defect was wrong under Lebesgue too
+and survived because the generator exercised too few decorations. I would have
+been tempted to state only the first half.
+
+One small imprecision worth knowing rather than fixing: "two nested compression
+generations are reported exact in dimensions `2, 3, 4, 6`" is accurate, but at
+`d = 6` only the `chain` check ran on all 64 cells — the `carry` check, which
+integrates the whole generation-1 state cell by cell, was skipped there for cost
+and is covered at `d <= 4`. `chain` is the claim; `carry` is a localizing aid.
+
 ---
 
 ## Verdict

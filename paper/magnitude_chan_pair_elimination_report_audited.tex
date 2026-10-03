@@ -1,0 +1,1022 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[margin=25mm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+\hypersetup{colorlinks=true,linkcolor=blue!55!black,citecolor=blue!55!black,urlcolor=blue!55!black}
+\setlist{nosep,leftmargin=*}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\setlength{\emergencystretch}{2em}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\HV}{\operatorname{HV}}
+\newcommand{\Mag}{\operatorname{Mag}}
+\newcommand{\E}{\mathbf E}
+\newcommand{\1}{\mathbf 1}
+\newcommand{\R}{\mathbb R}
+\newcommand{\wtO}{\widetilde O}
+\newcommand{\meet}{\wedge}
+
+\title{Pair-Elimination and Product-Measure Simplification of\\Chan's Fixed-Dimensional Hypervolume Algorithm}
+\author{Michael T. M. Emmerich\\\small Working research note}
+\date{2 October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The hypervolume indicator is the measure of a union of anchored boxes and is therefore a grounded special case of Klee's measure problem. Chan's 2013 orthant algorithm computes hypervolume in every fixed dimension $d\ge4$ in $\widetilde O(n^{d/3})$ time. Its global cutting recursion is simple; the technically difficult ingredient is the periodic simplification of orthants that, inside the current cell, are only one- or two-sided. Chan proves closure of a class of ``basic functions'' under symbolic integration and then averages over the grid induced by the remaining hard orthants.
+
+This note develops an alternative simplification calculus motivated by the $\ell_1$ magnitude of dominated sets. The central observation is that, on an anchored downward-closed set, magnitude is ordinary mass for the product measure $\bigotimes_i(\delta_0+\tfrac12\lambda_i)$. The Dirac factor $\delta_0$ literally evaluates the corresponding coordinate at zero; downward closedness then identifies that zero-slice with the coordinate projection. Thus magnitude packages all projected hypervolumes into one positive product measure, while Lebesgue measure is another specialization of the same elimination calculus.
+
+The four-dimensional case is developed in detail and has been audited against exact product-grid oracles. The audit exposed several endpoint issues that are invisible or easy to miss under Lebesgue measure: strict residual staircases, EMPTY versus the anchor singleton, complemented lower-endpoint decorations, left-continuous inversions, and the choice of grid-cell convention. The corrected calculus therefore uses split unary weights (a separate anchor weight and positive-axis step density), decorated finite-run inversions, deterministic first-winner tie-breaking, and right-open grid cells.
+
+For general fixed dimension, a state is a signed sum of bounded-list pairwise terms. One-variable elimination inverts each incident predicate to a finite union of decorated runs, expands the dimension-bounded run choices, chooses active lower and upper endpoints with a deterministic tie rule, and evaluates decorated cumulative differences. The number of raw descendants emitted by one compression is bounded by a dimension-only constant $C_d^{\rm emit}$; a deliberately loose bookkeeping bound is $2^{O(d^3)}$. This raw emission bound is the quantity used in the asymptotic proof. In software, identical grid-measurable terms should be merged incrementally; the audit shows that the held state can be hundreds of times smaller than the raw emission, but no sharp general bound on the merged state size is claimed here.
+
+Compression has now been checked exactly in $d=4$ and $d=6$ under both Lebesgue and magnitude product measures, and two nested compression generations have been checked in dimensions $2,3,4,6$. The elimination calculus is exact against product-grid oracles through $p=12$ variables; $d=8$ compression would require $p=16$ and remains untested. With Chan's cutting and fixed-block schedule unchanged, the mathematical raw-emission closure retains the $\widetilde O_d(n^{d/3})$ asymptotic bound. The contribution is a product-measure reformulation and a verified simplification calculus, not a better exponent.
+\end{abstract}
+
+\section{Two views of the same problem}
+
+This note is intended for two communities. In evolutionary multiobjective optimization (EMO), the starting object is the \emph{hypervolume indicator}. In computational geometry (CG), the same object is a special case of Klee's measure problem.
+
+Let $Y=\{y^{(1)},\dots,y^{(n)}\}\subset\R^d$ be a nondominated approximation set and let $r$ be a reference point dominated by all points in the maximization convention (or dominating all points in minimization). After the usual translation/reflection, the dominated region can be written
+\[
+D(Y)=\bigcup_{i=1}^n [0,a^{(i)}_1]\times\cdots\times[0,a^{(i)}_d].
+\]
+Its $d$-dimensional volume is the hypervolume indicator
+\[
+\HV_d(Y)=\lambda_d(D(Y)).
+\]
+For CG readers this is Klee's measure problem restricted to anchored boxes, equivalently to orthants clipped to a bounding box.
+
+Chan~\cite{Chan2013} gives $O(n^{d/2})$ time for general fixed-dimensional Klee measure and $\wtO(n^{d/3})$ for orthants/hypervolume. In particular,
+\[
+\HV_4\quad\text{is computable in}\quad \wtO(n^{4/3}).
+\]
+Y\i ld\i z and Suri~\cite{YildizSuri2012} provide an earlier grounded-box reduction to weighted lower-dimensional volume and ordered-product maintenance. The present note is closer in spirit to Chan's Section~4, but it uses a product-measure algebra suggested by magnitude.
+
+\section{Where Chan's fixed-dimensional algorithm is difficult}
+
+Chan's orthant algorithm has a simple global structure~\cite{Chan2013}.
+
+\begin{enumerate}
+\item Restrict attention to the current cell $\Gamma$.
+\item Simplify every orthant that is locally one- or two-sided.
+\item The remaining hard orthants expose a $(d-3)$-face intersecting $\Gamma$.
+\item Cut at weighted medians of these faces.
+\item Repeat, but perform the expensive simplification only once every block of cutting levels.
+\end{enumerate}
+
+For $d=4$, after a block parameterized by $r$, the recurrence has the form
+\begin{equation}
+T(N)\le O(r^4)T(N/r^3)+O(r^4N)                         \label{eq:chanrec}
+\end{equation}
+(up to polylogarithmic factors). Choosing $r=N^\delta$ for a sufficiently small constant $\delta>0$ gives $T(N)=\wtO(N^{4/3})$~\cite{Chan2013}.
+
+The nontrivial part is simplification. Locally one-sided orthants are slabs and can be removed by shrinking the cell. Locally two-sided orthants on coordinates $(i,j)$ form a monotone staircase and can be absorbed into an indicator
+\[
+[x_j< f_{ij}(x_i)]
+\]
+(or the corresponding reversed inequality/orientation). Chan's Lemma~4.4 proves that a class of ``basic functions'' remains manageable under integration in one variable; the proof explicitly rewrites constraints using monotone inverses and active-bound case splits. Lemma~4.5 averages the resulting basic function on the grid of the surviving hard boxes, reducing its complexity to $O(m)$ when $m$ boxes remain.
+
+The public \texttt{FastHVChan} implementation~\cite{FastHVChan} follows this structure closely. Its \texttt{\_absorb} routine merges all locally two-sided orthants of a given axis-pair/orientation into one staircase condition. The generic \texttt{\_eliminate\_axis} routine performs Chan's active-bound symbolic integration, and \texttt{compress\_terms} creates fresh variables, calls the eliminator once per axis, divides by grid-cell widths, and merges equal terms. This is faithful and valuable as an executable specification, but it is also the most elaborate part of the code.
+
+The first goal is to replace this compression machinery in the grounded four-dimensional hypervolume case while leaving Chan's cutting recursion untouched.  The second goal, developed after the detailed $4D$ construction, is to isolate the dimension-independent mechanism and prove a general fixed-dimensional pair-elimination theorem.
+
+\section{Magnitude and the product-measure viewpoint}
+
+Most readers in EMO and computational geometry will be more familiar with hypervolume than with magnitude, so we recall the metric-space definition before specializing it to dominated regions. For a finite metric space
+\[
+X=\{x_1,\ldots,x_n\},
+\]
+form the similarity matrix
+\[
+Z_{ij}=e^{-d(x_i,x_j)}.
+\]
+When $Z$ is invertible, the \emph{magnitude} of $X$ is
+\begin{equation}
+\Mag(X)=\mathbf 1^{\mathsf T}Z^{-1}\mathbf 1.                 \label{eq:finitemag}
+\end{equation}
+Equivalently, if $w$ solves $Zw=\mathbf 1$, then $\Mag(X)=\sum_iw_i$. Magnitude may therefore be viewed as an ``effective cardinality'': nearby points overlap through the kernel $e^{-d}$, whereas widely separated points contribute more independently. See Leinster and Meckes~\cite{LeinsterMeckes2017}. We use only the explicit $\ell_1$ formulas below.
+
+For an interval with the usual metric,
+\begin{equation}
+\Mag([0,L])=1+\frac L2.                                      \label{eq:intervalmag}
+\end{equation}
+The decisive feature of $\ell_1$ is multiplicativity. Since
+\[
+e^{-\|(x,x')-(y,y')\|_1}=e^{-\|x-y\|_1}e^{-\|x'-y'\|_1},
+\]
+magnitude satisfies
+\begin{equation}
+\Mag(A\times B)=\Mag(A)\Mag(B)                              \label{eq:productmag}
+\end{equation}
+for the compact $\ell_1$ spaces used here~\cite{LeinsterMeckes2017}. Hence a single anchored box satisfies
+\begin{equation}
+\Mag\!\left(\prod_{i=1}^d[0,a_i]\right)
+   =\prod_{i=1}^d\left(1+\frac{a_i}{2}\right).              \label{eq:boxmag}
+\end{equation}
+
+\subsection*{What the Dirac mass does}
+The product-measure formula below is easiest to understand one coordinate at a time. The Dirac measure $\delta_0$ is the unit point mass at the origin:
+\[
+\delta_0(A)=\begin{cases}1,&0\in A,\\0,&0\notin A,\end{cases}
+\qquad
+\int \varphi(t)\,d\delta_0(t)=\varphi(0).
+\]
+Thus integrating one coordinate against $\delta_0$ does not ``average near zero'': it literally fixes that coordinate to zero.
+
+In two dimensions,
+\begin{align}
+\left(\delta_0+\tfrac12\lambda_x\right)\otimes
+\left(\delta_0+\tfrac12\lambda_y\right)
+={}&\delta_0\otimes\delta_0
+ +\tfrac12\lambda_x\otimes\delta_0
+ +\tfrac12\delta_0\otimes\lambda_y
+ +\tfrac14\lambda_x\otimes\lambda_y.                 \label{eq:dirac2d}
+\end{align}
+For a set $D\subseteq[0,\infty)^2$, these four terms respectively measure the origin, the slice of $D$ on the $x$-axis, the slice on the $y$-axis, and the ordinary area. If $D$ is downward closed, the zero-slice is exactly the corresponding projection. For example,
+\[
+x\in\pi_x(D)
+\iff \exists y\ge0:(x,y)\in D
+\implies (x,0)\in D,
+\]
+because $(x,0)\le(x,y)$ coordinatewise; the converse is immediate. Hence
+\[
+\{x:(x,0)\in D\}=\pi_x(D).
+\]
+This equality is special to downward-closed sets. A floating rectangle can project onto the $x$-axis without meeting the axis at all.
+
+The same logic works in every dimension. Expanding
+\begin{equation}
+\mu_M=\bigotimes_{i=1}^d\left(\delta_0+\frac12\lambda_i\right)             \label{eq:magmeasure}
+\end{equation}
+chooses a subset $S\subseteq[d]$: coordinates in $S$ are integrated with Lebesgue measure, while coordinates outside $S$ are fixed to zero by Dirac masses. The corresponding contribution is
+\[
+2^{-|S|}\lambda_{|S|}\bigl(\{x_S:(x_S,0_{-S})\in D\}\bigr).
+\]
+For downward-closed $D$,
+\begin{equation}
+\boxed{\{x_S:(x_S,0_{-S})\in D\}=\pi_S(D).}                 \label{eq:sliceprojection}
+\end{equation}
+Indeed, if $x_S$ lies in the projection then $(x_S,y_{-S})\in D$ for some $y_{-S}\ge0$, and lowering the complementary coordinates to zero keeps the point inside $D$. Therefore Emmerich's dominated-set formula~\cite{Emmerich2026} becomes
+\begin{equation}
+\boxed{\Mag(D)=\mu_M(D)=\sum_{S\subseteq[d]}2^{-|S|}\,\lambda_{|S|}(\pi_S D).}   \label{eq:projection}
+\end{equation}
+The empty projection contributes one for nonempty $D$. In EMO language, every other summand is the hypervolume of a coordinate projection. This is the bridge from metric magnitude to product-measure integration.
+
+In dimension four let
+\[
+H_k(D)=\sum_{|S|=k}\HV_S(D).
+\]
+Then
+\begin{equation}
+\Mag(D)=1+\frac12H_1+\frac14H_2+\frac18H_3+\frac1{16}\HV_4(D),      \label{eq:mag4}
+\end{equation}
+and therefore
+\begin{equation}
+\boxed{\HV_4(D)=16\Mag(D)-16-8H_1(D)-4H_2(D)-2H_3(D).}             \label{eq:recoverHV}
+\end{equation}
+The 14 nontrivial projections of dimension at most three are computable in $O(n\log n)$ total time for fixed dimension. Thus an exact scalar magnitude algorithm with time $T(n)$ yields four-dimensional hypervolume in $T(n)+O(n\log n)$.
+
+For the symbolic calculus it is enough to consider the two one-dimensional measures actually needed here,
+\[
+d\mu_i=a_i\,d\delta_0+c_i\,dt,
+\qquad a_i,c_i\ge0,
+\]
+on a bounded coordinate interval. Lebesgue measure is $(a_i,c_i)=(0,1)$; ordinary magnitude is $(1,\tfrac12)$. A unary symbolic weight is therefore stored in \emph{split form}: one scalar weight at the anchor and one right-continuous step density on the positive axis. This split representation is essential after decorated inversion, because a branch may own the anchor $\{0\}$ without owning any positive interval.
+
+\paragraph{Endpoint and cell convention.}
+Lebesgue measure ignores isolated boundaries; magnitude does not, because of the anchor atom. EMPTY is never encoded by the numerical value $0$: the empty set and $\{0\}$ have masses $0$ and $1$, respectively, under magnitude. Finite inverse bounds retain open/closed decorations, and the lower-endpoint flag is complemented when a cumulative difference subtracts the mass below a feasible interval. Infinite endpoints retain their ordering meaning during active-bound comparisons and are clamped to the bounded ground interval only at the measure step.
+
+For compression we use right-open grid cells. If $0=g_0<\cdots<g_k=M$ are physical grid coordinates, add a symbolic sentinel $g_{k+1}>M$ and use
+\[
+[g_j,g_{j+1})\cap[0,M].
+\]
+The anchor belongs to the first cell, and the predecessor/successor maps are right-continuous step functions of the grid-location variable. This is a representation convention, not a change in the conditional expectation.
+
+\section{The grounded six-staircase model}
+
+After slab removal, all locally two-sided grounded orthants in a four-dimensional cell can be summarized by six nonincreasing step functions
+\[
+f_{12},f_{13},f_{14},f_{23},f_{24},f_{34}.
+\]
+The easy residual indicator has the form
+\begin{equation}
+F(x_1,x_2,x_3,x_4)
+ =\prod_{1\le i<j\le4}[x_j< f_{ij}(x_i)],                  \label{eq:six}
+\end{equation}
+possibly multiplied by one-dimensional step densities inherited from previous compression.
+
+\paragraph{Decorated-cap convention.}
+Every bound generated by a strict staircase carries its endpoint type.  Formally one may work in the ordered set of decorated endpoints (finite value plus open/closed flag, together with EMPTY/FULL sentinels).  Coordinatewise meet, prefix intersection and generalized inversion are taken in this decorated order.  To keep the formulas readable, symbols such as $q$, $r(x)\wedge s(y)$, $\rho$ and $\sigma$ suppress these decorations; all exact magnitude calculations use the decorated versions.
+
+Pair the variables as $(1,2)\mid(3,4)$ and put
+\[
+f=f_{12},\qquad g=f_{34},
+\]
+\[
+r(x)=(f_{13}(x),f_{14}(x)),\qquad
+s(y)=(f_{23}(y),f_{24}(y)).
+\]
+For fixed $(x,y)$, the cross constraints say that $(x_3,x_4)$ is capped by the coordinatewise meet
+\[
+r(x)\meet s(y).
+\]
+The role of $g=f_{34}$ is only to restrict the target $(x_3,x_4)$ plane to another monotone staircase. This is the $2+2$ structure exploited below.
+
+\section{Three exact identities}
+
+\subsection{Meet contraction}
+
+Let a two-dimensional cumulative kernel be
+\[
+G(q)=\int \1[u\le q] \,d\nu(u)
+\]
+for a positive target measure $\nu$ (possibly already restricted below $g$). Suppose a source integration has produced finite expansions
+\[
+X=\sum_\alpha c_\alpha M_{r_\alpha},\qquad
+Y=\sum_\beta d_\beta M_{s_\beta},
+\]
+where $(M_pG)(q)=G(q\meet p)$. A naive interaction contains all pairwise meets:
+\[
+K=\sum_{\alpha,\beta}c_\alpha d_\beta G(r_\alpha\meet s_\beta).
+\]
+Define upper cumulative coefficient fields
+\[
+A(u)=\sum_{r_\alpha\ge u}c_\alpha,
+\qquad
+B(u)=\sum_{s_\beta\ge u}d_\beta.
+\]
+Then Fubini gives the contraction identity
+\begin{equation}
+\boxed{K=\int A(u)B(u)\,d\nu(u).}                              \label{eq:meetcontract}
+\end{equation}
+Thus a potentially quadratic meet convolution is evaluated by a planar cumulative sweep. Under a prefix update $A\leftarrow A+\delta$, the mixed moment changes by
+\[
+\int AB\leftarrow\int AB+\delta\int B,
+\]
+and symmetrically for $B$. No pairwise meet table is required.
+
+\subsection{Prefix measure below one strict monotone staircase}
+
+Let $f$ be nonincreasing and define the strict residual
+\[
+D_f=\{(x,y):y<f(x)\}.
+\]
+For source prefixes $I_A=[0,A]$ and $I_B=[0,B]$ set
+\[
+C_f(A,B)=\mu_{12}(D_f\cap(I_A\times I_B)).
+\]
+Write
+\[
+X(I)=\mu_1(I),\qquad Y_{\le}(B)=\mu_2([0,B]),\qquad
+Y_{<}(t)=\mu_2([0,t)),
+\]
+and
+\[
+P(I)=\int_IY_{<}(f(x))\,d\mu_1(x).
+\]
+For a threshold $B$ let
+\[
+\Theta_f(B)=\{x:B<f(x)\},
+\]
+viewed as a decorated prefix interval, possibly EMPTY or FULL.  Splitting $I_A$ according to this exact feasible prefix gives
+\begin{equation}
+\boxed{
+C_f(A,B)=P(I_A)+X(I_A\cap\Theta_f(B))Y_{\le}(B)
+-P(I_A\cap\Theta_f(B)).}                                   \label{eq:twobranch}
+\end{equation}
+This is the endpoint-safe version of the two-branch formula.  If $I_A\subseteq\Theta_f(B)$ (in general position, $B<f(A)$), the right-hand side is the product $X(I_A)Y_{\le}(B)$.  Once $I_A$ extends beyond the decorated endpoint of $\Theta_f(B)$, it is $P(I_A)+Q(B)$ with
+\[
+Q(B)=X(\Theta_f(B))Y_{\le}(B)-P(\Theta_f(B)).
+\]
+Thus the same product-versus-sum structure is obtained without identifying an empty inverse prefix with the anchor point.
+
+\subsection{Threshold-antiderivative lemma}
+
+The threshold-antiderivative step is the easiest place to introduce a subtle endpoint or orientation error, so we formulate it using interval objects rather than numerical inverse endpoints.
+
+\begin{lemma}[Threshold antiderivative with decorated bounds]   \label{lem:threshold}
+Let $I=[L,U]$ carry a positive measure $\mu$, let $q$ be an integrable step density, and write
+\[
+\mathcal Q(J)=\int_Jq(x)\,d\mu(x)
+\]
+for every interval object $J\subseteq I$.  For a monotone step function $c$, a threshold $u$, and a chosen strict/non-strict predicate, let $I_c(u)$ be the exact feasible subset of $I$.  It is a prefix or suffix interval, possibly EMPTY or FULL; a finite endpoint is stored together with an open/closed flag.
+
+For any fixed number of such threshold constraints and a query prefix $I_t$, their intersection $J(u,v,t)$ is again an interval object and
+\begin{equation}
+\boxed{\int_{J(u,v,t)}q(x)\,d\mu(x)=\mathcal Q(J(u,v,t)).}      \label{eq:intervalthreshold}
+\end{equation}
+On a branch where the active lower and upper bounds are fixed, the value is a difference of unary cumulative functions.  If an active lower endpoint depends only on one latent coordinate and an active upper endpoint only on another, feasibility is a comparison between two monotone unary functions and hence is separated by one monotone curve in latent space.  Therefore, for any fixed number of latent thresholds, the truncated antiderivative is a constant-size signed sum of separable unary factors restricted by monotone latent boundaries.
+\end{lemma}
+
+For Lebesgue measure endpoint decorations disappear.  For magnitude they are load-bearing: EMPTY has mass zero whereas the singleton anchor $\{0\}$ has mass one.  A correct implementation must therefore use decorated bounds or explicit left/right cumulative values throughout.
+
+\begin{definition}[Latent one-turn normal form]                  \label{def:latent}
+A latent rank-one term is a function of $(u,v)$ of the form
+\begin{equation}
+a(u)b(v)\,\1[v\le \min\{p^\uparrow(u),p^\downarrow(u)\}],     \label{eq:latentterm}
+\end{equation}
+where $p^\uparrow$ is nondecreasing and $p^\downarrow$ is nonincreasing; either boundary may be identically $+\infty$. Let $\mathcal L$ denote the signed span of a dimension-dependent constant number of such terms.
+\end{definition}
+
+\begin{lemma}[Latent-threshold closure]                          \label{lem:latentclosure}
+Fix a constant $k$. Let $q$ be a one-dimensional step density of breakpoint complexity $N$, and multiply it by at most $k$ latent threshold indicators, each involving $x$ and only one of $u,v$, with an arbitrary monotone orientation. The truncated antiderivative in $x$ belongs to $\mathcal L$. Its univariate factors and boundary functions have total breakpoint complexity $O(N)$, and after sorted event lists are available the representation is constructible in $O(N)$ time.
+\end{lemma}
+
+\begin{proof}
+Each threshold cuts the $x$-axis to a prefix or suffix. Their intersection is an interval
+\[
+[L_*(u,v),U_*(u,v)]
+\]
+(possibly empty), where $L_*$ is the maximum of constantly many latent unary endpoints and $U_*$ is the minimum of constantly many such endpoints. Partition the latent plane according to the active lower and upper endpoints. There are only $O_k(1)$ branches. On one branch the integral is
+\[
+\1[L_*\le \min\{t,U_*\}]\bigl(Q(\min\{t,U_*\})-Q(L_*^-)\bigr).
+\]
+If both active endpoints depend on the same latent coordinate, the expression is unary in that coordinate. Otherwise their feasibility comparison is between a monotone function of $u$ and a monotone function of $v$; its indicator is a monotone region. After choosing the orientation of $v$, this region is below either a nondecreasing or a nonincreasing boundary. Intersections of increasing boundaries are represented by their pointwise minimum, and likewise for decreasing boundaries. A simultaneous increasing and decreasing restriction gives exactly \eqref{eq:latentterm}. Complements are expanded by $1-\1[\cdot]$, creating only a constant factor in the number of terms.
+
+Generalized inversion, composition of monotone step functions, and pointwise min/max of same-orientation monotone step functions can each be constructed by one merge scan. With only constantly many operations, breakpoint complexity and construction time are $O(N)$. This proves the claim.
+\end{proof}
+
+\begin{corollary}[Linear monotone calculus]                      \label{cor:linearcalc}
+Any fixed expression built from $O(1)$ monotone step functions by generalized inversion, monotone composition, min/max, and the threshold-antiderivative operation of Lemma~\ref{lem:threshold} has total breakpoint complexity linear in the total input complexity, and can be built in linear time once the event lists are sorted.
+\end{corollary}
+
+\section{Four-prefix normal form}
+
+For a six-staircase term, define the four-prefix integral
+\begin{equation}
+K(a,b,c,d)=\int_{[0,a]\times[0,b]\times[0,c]\times[0,d]}F\,d\mu.   \label{eq:K4}
+\end{equation}
+The following normal form is the technical core of the proposed compressor.
+
+\begin{theorem}[Four-prefix normal form, grounded $d=4$]        \label{thm:prefix}
+Assume the six staircases in \eqref{eq:six} and all unary densities have total breakpoint complexity $N$. Then $K(a,b,c,d)$ can be represented as a sum of a dimension-dependent constant number of primitives
+\begin{equation}
+J(C,D)=\int_0^C \alpha(u)\,
+\Gamma\!\left(\min\{D,h^\uparrow(u),h^\downarrow(u)\}\right)d\nu(u),  \label{eq:J}
+\end{equation}
+where
+\[
+\Gamma(v)=\int_0^v\beta(t)\,d\omega(t),
+\]
+$h^\uparrow$ is nondecreasing, $h^\downarrow$ is nonincreasing, and the arguments $C,D$ are coordinatewise minima of the prefix parameters $a,b,c,d$ and a constant number of unary monotone images of them. The total fine breakpoint complexity of all unary functions is $O(N)$.
+
+Let $A_1,\dots,A_4$ be hard-grid coordinate sets with total size $O(m)$. All values $K(a,b,c,d)$ for $(a,b,c,d)\in A_1\times\cdots\times A_4$ are represented by $O(m)$ shared one-dimensional \emph{interval records}. Each record stores the local step density together with the cumulative value at the left endpoint, so it supports exact evaluation at any coordinate in that interval whenever the one-dimensional measure has $O(1)$ interval-mass evaluation (as for Lebesgue and ordinary magnitude). After sorting, these records can be constructed in $O(N+m)$ time; with generic sorting/searches the bound is $O((N+m)\log(N+m))$. A registered hard-grid prefix query uses $O(1)$ arithmetic operations; an arbitrary derived-coordinate query uses one predecessor search, hence $O(\log m)$ time.
+\end{theorem}
+
+\paragraph{Proof idea.}
+Exchange source and target integration.  For $q=(u,v)$ let $R(q)$ and $S(q)$ be the decorated source prefixes
+\[
+R(q)=\{x:q\prec r(x)\},\qquad S(q)=\{y:q\prec s(y)\},
+\]
+where $\prec$ means componentwise membership below the strict decorated caps.  We write $\rho(q)$ and $\sigma(q)$ for their decorated right bounds.  Then
+\[
+K(a,b,c,d)=\int_{D_g\cap[0,c]\times[0,d]}
+C_f(I_a\cap R(q),I_b\cap S(q))\,d\nu(q),
+\]
+where the notation $C_f$ is extended in the evident way from numerical prefixes to decorated prefix intervals.  The source caps are separated by whether $I_a\subseteq R(q)$ and $I_b\subseteq S(q)$; these events are anchored target rectangles with corners determined by $r(a)$ and $s(b)$ under the same endpoint convention. Equation~\eqref{eq:twobranch} shows that only the six target basis functions
+\[
+1,\quad X(\rho),\quad P(\rho),\quad Y(\sigma),\quad Q(\sigma),\quad X(\rho)Y(\sigma)
+\]
+are needed. The selector for whether $\rho$ is controlled by coordinate 3 or 4 is bounded by a nondecreasing curve; similarly for $\sigma$. The target staircase $g$ and the branch boundary of \eqref{eq:twobranch} are nonincreasing. Thus each term is a separable density $\alpha(u)\beta(v)$ below the minimum of one nondecreasing and one nonincreasing boundary, which is exactly \eqref{eq:J}. Appendix~\ref{app:prefix} gives the details.
+
+The shared-record claim uses two separate facts.  A coordinatewise minimum chooses one of its operands and creates no additional value beyond those operands.  However, the operands include images of hard coordinates under a dimension-dependent constant family of monotone maps; these images can be new numerical values.  There are still only $O(m)$ of them.  For recursion we store the resulting one-dimensional functions as interval records, not merely isolated samples: on each interval the step density is fixed and the cumulative is recovered from its left-endpoint value plus the measure of a subinterval. Thus future derived coordinates can be evaluated exactly by predecessor search without restoring discarded fine events.
+
+\section{Evaluating one primitive}
+
+Let
+\[
+h(u)=\min\{h^\uparrow(u),h^\downarrow(u)\}.
+\]
+Since one component increases and the other decreases, they cross at most once. Hence $h$ has at most one turning point. Define
+\[
+A(x)=\int_0^x\alpha(u)d\nu(u),\qquad
+\Gamma(y)=\int_0^y\beta(v)d\omega(v),
+\]
+\[
+R(x)=\int_0^x\alpha(u)\Gamma(h(u))d\nu(u).
+\]
+For a monotone branch of $h$, let $\Theta_h(D)$ be the decorated feasible interval for the cap $D$.  Lemma~\ref{lem:threshold} evaluates the contribution by intersecting $[0,C]$ with $\Theta_h(D)$ and taking the appropriate cumulative difference.  Away from atoms this reduces to the familiar scalar formulas
+\[
+J(C,D)=\Gamma(D)A(e)+R(C)-R(e)
+\]
+for a decreasing branch and
+\[
+J(C,D)=R(e)+\Gamma(D)(A(C)-A(e))
+\]
+for an increasing branch, where $e$ is the numerical endpoint of the feasible interval.  The implementation, however, uses the decorated interval itself so that EMPTY and an anchor-only interval are never confused.  For a one-turn boundary, split once at the turning point.
+
+The boundary class is stable under new monotone constraints. If
+\[
+h=\min(h^\uparrow,h^\downarrow)
+\]
+and $k$ is nondecreasing, then
+\[
+\min(h,k)=\min(\min(h^\uparrow,k),h^\downarrow),
+\]
+where the first component remains nondecreasing. The case of nonincreasing $k$ is symmetric. This simple closure is what makes the normal form suitable for recursion.
+
+\section{Closure under absorption and grid compression}
+
+We now connect the prefix normal form to Chan's periodic simplification.
+
+\subsection{Absorbing newly easy masks}
+
+A one-sided mask only modifies one unary density or clips one coordinate range. A two-sided grounded mask has the decorated strict form
+\[
+[x_j\prec k(x_i)],
+\]
+where $\prec$ records the correct open/closed endpoint semantics (for the original uncovered residual this is strict).  If an $ij$ constraint already exists, the two feasible prefixes are intersected; numerically this is the minimum of the two staircase boundaries together with the induced endpoint decoration.  Monotonicity is preserved.  In the $J$-representation this adds one more monotone boundary and therefore remains in the same class.
+
+The only nontrivial case is a compressed state containing a latent $J$-primitive. Expand
+\[
+J(C(x),D(x))
+\]
+as an integral over latent $(u,v)$. For fixed $(u,v)$, the physical variables satisfy the same grounded six-staircase constraints as before, while $u\le C(x)$ and $v\le D(x)$ contribute only unary latent-threshold indicators. Every one-dimensional antiderivative used in the $2+2$ proof is therefore covered by Lemma~\ref{lem:latentclosure}. Products of latent terms remain in $\mathcal L$: separable factors multiply, increasing restrictions combine by a minimum, decreasing restrictions combine by a minimum, and complements expand into a constant signed sum. Thus the entire parametric four-prefix calculation returns a dimension-dependent constant number of $J$-primitives.
+
+\begin{lemma}[Parametric re-expression / four-prefix closure]       \label{lem:parametricclosure}
+Let one incoming compressed primitive be
+\begin{equation}
+T(x)=q(x)E(x)J_{\alpha,\beta,h}(C(x),D(x)),                 \label{eq:incomingprimitive}
+\end{equation}
+where $q(x)=\prod_{i=1}^4q_i(x_i)$, $E$ is a conjunction of the six possible grounded decorated two-sided staircase masks, and
+\[
+J_{\alpha,\beta,h}(C,D)
+ =\iint \alpha(u)\beta(v)
+   \1[u\prec C]\1[v\prec D]\1[v\prec h(u)]\,d\nu(u)d\omega(v).
+\]
+Assume
+\[
+C(x)=\min_{r\le p}c_r(x_{i_r}),\qquad
+D(x)=\min_{s\le q}d_s(x_{j_s}),
+\]
+where $p,q$ and the numbers of monotonicity pieces of the unary maps are bounded by constants depending only on dimension four.  Multiply $T$ by any merged family of newly easy grounded one-/two-sided masks and take its four-prefix integral.  Then the result is a signed sum of at most $C_4$ primitives of the form \eqref{eq:J}, for an absolute constant $C_4$ depending only on this fixed grammar, not on the number of staircase breakpoints, $m$, or $n$.  The total breakpoint complexity of all emitted unary data is linear in the incoming complexity, and the constructor is linear after sorting.
+\end{lemma}
+
+\begin{proof}
+Expand the latent integral in \eqref{eq:incomingprimitive} and fix $(u,v)$.  The conditions $u\prec C(x)$ and $v\prec D(x)$ split into a constant number of unary threshold predicates on the physical coordinates.  On physical coordinate $x_i$, every such predicate cuts the line to a decorated prefix or suffix interval.  Intersecting these with the current cell leaves an interval whose lower and upper endpoints are chosen from a \emph{finite candidate set}: the two cell endpoints, a constant number of inverse-threshold maps of $u$, a constant number of inverse-threshold maps of $v$, and constants.  Let $K_0$ bound the number of candidates per endpoint; $K_0$ depends only on the four-dimensional primitive grammar.
+
+Use one-dimensional finite differences to replace the physical interval box by at most $2^4=16$ signed prefix boxes.  On each prefix box apply Theorem~\ref{thm:prefix}.  The static normal form contains a fixed number $R_0$ of pieces.  After substituting the parameter-dependent prefix endpoints, every factor is a unary function of exactly one of
+\[
+z_1,z_2,z_3,z_4,u,v,
+\]
+and every remaining branch test compares two such unary functions.  No mixed algebraic expression such as $uv$ or $z_i u$ is generated: the operations in Theorem~\ref{thm:prefix} are thresholding, generalized inversion, monotone composition, min/max, addition and multiplication of already separable unary factors.
+
+Classify each residual comparison by the variables it involves.
+\begin{enumerate}[label=(\roman*),leftmargin=2em]
+\item A comparison involving the same variable on both sides, e.g. $a(u)\prec b(u)$, is absorbed into that variable's unary density.  It may have many breakpoints, but it creates no new primitive.
+\item A physical--physical comparison $a(z_i)\prec b(z_j)$ is rewritten by decorated generalized inversion as another grounded two-sided physical staircase and is absorbed into the new $E'(z)$.
+\item A $u$--physical comparison is rewritten as $u\prec c_i(z_i)$ or its complement.  Positive occurrences join the new cap
+\[
+C'(z)=\min_i c_i(z_i).
+\]
+Complements are expanded by $1-\1[\cdot]$; the number of such expansions is dimension-bounded.
+\item A $v$--physical comparison is treated symmetrically and joins
+\[
+D'(z)=\min_i d_i(z_i).
+\]
+\item A cross-latent comparison $a(u)\prec b(v)$ is, on a monotonicity piece and with decorated inversion, equivalent to $v\prec k(u)$ or its complement.  After complement expansion, collect all nondecreasing $k$ by pointwise minimum into $h'^{\uparrow}$ and all nonincreasing $k$ into $h'^{\downarrow}$.  Intersect also with the incoming latent boundary.  The result is exactly
+\[
+v\prec\min\{h'^{\uparrow}(u),h'^{\downarrow}(u)\}.
+\]
+\end{enumerate}
+
+After this normalization, every signed branch has the form
+\[
+q'(z)E'(z)
+\iint \alpha'(u)\beta'(v)
+\1[u\prec C'(z)]\1[v\prec D'(z)]
+\1[v\prec\min\{h'^{\uparrow}(u),h'^{\downarrow}(u)\}]\,d\nu d\omega,
+\]
+which is one output primitive of the original grammar.
+
+The number of branches is bounded independently of input complexity.  A deliberately loose explicit bound is
+\begin{equation}
+C_4\le 16\,R_0\,K_0^{8}\,2^{L_0},                            \label{eq:C4bound}
+\end{equation}
+where $L_0$ bounds the number of complement-bearing cross-parameter comparisons in one static normal-form piece.  The constants $R_0,K_0,L_0$ depend only on the fixed four-dimensional grammar.  This proves the dimension-only primitive bound.
+
+Finally, same-variable filters can introduce many breakpoints but only through a fixed collection of unary functions.  By Corollary~\ref{cor:linearcalc}, their inverses, compositions and same-orientation minima/maxima have total breakpoint complexity linear in the input complexity and are constructible by monotone merge scans.  Hence the emitted unary data have linear total complexity and the constructor is linear once event lists are sorted.
+\end{proof}
+
+\begin{remark}[Primitive count versus breakpoint count]
+The proof does not claim that each branch region is connected, nor that two monotone unary functions cross only once.  A same-variable comparison may alternate many times; it is stored as a unary step filter and contributes to breakpoint complexity, not primitive count.  The constant $C_4$ counts only the finite choices of active endpoint candidates, complement expansions and variable-pair types.
+\end{remark}
+
+\subsection{Coarsening by conditional expectation}
+
+Let $\mathcal G$ be the product grid generated by the surviving hard boxes and let $F$ denote the accumulated easy residual density. Define
+\[
+\bar F=\E_\mu[F\mid\mathcal G].
+\]
+On a grid cell $C=I_1\times\cdots\times I_4$,
+\[
+\bar F|_C=\frac{\int_C F\,d\mu}{\prod_i\mu_i(I_i)}.
+\]
+If $P_F$ is the four-prefix function, the numerator is the four-dimensional finite difference of $P_F$ at the 16 corners of $C$. Thus compression requires 16 evaluations of the same constant-size prefix normal form. Division by the cell mass only multiplies by four unary step densities.
+
+The new step boundaries occur only at the new grid coordinates, so after rebuilding the one-dimensional records the fine pre-compression breakpoints can be discarded. If the new grid has total coordinate complexity $O(m)$, the compressed state stores $O(m)$ one-dimensional interval/prefix records.
+
+\subsection{Why discarded geometry is never needed again}
+
+The tower argument needs a measurability condition that is easy to hide in informal prose.  Call the parent grid $\mathcal G$ \emph{future-complete} for the interval until the next compression if every threshold that can become a physical descendant mask in that interval---including inherited cell boundaries and cutting coordinates---is $\mathcal G$-measurable.  Chan's weighted-median cuts are made at hard-face coordinates, so the hard-coordinate product grid together with the current cell boundary has this property.  A more aggressive off-grid coarsening need not.
+
+Let $\bar F=\E_\mu[F\mid\mathcal G]$.  Suppose a descendant makes a formerly hard mask $B$ easy, with $B$ $\mathcal G$-measurable, and let $\mathcal G'$ be a coarsening of the restricted parent grid.  Then
+\begin{equation}
+\boxed{
+\E[F B\mid\mathcal G']
+ =\E[\bar F B\mid\mathcal G'].}                               \label{eq:tower}
+\end{equation}
+Indeed,
+\[
+\E[FB\mid\mathcal G]=B\E[F\mid\mathcal G]=B\bar F,
+\]
+and the tower property gives the result.  The measurability hypothesis is essential: an off-grid descendant mask can distinguish fine geometry discarded by $\bar F$.
+
+\begin{theorem}[Magnitude/product-measure state closure with primitive count] \label{thm:closure}
+Fix grounded dimension four and the arity bounds of the prefix normal form.  There is a constant $C_4$ depending only on these fixed four-dimensional bounds with the following property.  Let the current state be a signed sum of $S$ prefix-normal-form primitives of total fine breakpoint complexity $N$.  Absorb any newly easy grounded one-/two-sided masks and let the remaining $m$ hard orthants define a future-complete next grid.  Then the conditional expectation of the updated state on that grid is representable by at most
+\[
+\boxed{S'\le C_4S}
+\]
+prefix-normal-form primitives.  A conservative implementation uses $O(S'm)$ one-dimensional interval/prefix records and $O(S(N+m)\log(N+m))$ rebuild time, or $O(S(N+m))$ once the required event lists are sorted.  A registered four-prefix query costs $O(S')$, and one hard-grid cell integral uses at most $16S'$ primitive-prefix evaluations.
+\end{theorem}
+
+\begin{proof}
+For one incoming primitive, Lemma~\ref{lem:parametricclosure} gives an explicit constructor emitting at most $C_4$ output primitives, with $C_4$ bounded as in \eqref{eq:C4bound} and independent of staircase complexity. Conditional expectation and multiplication by physical masks are linear, so distinct incoming primitives are processed independently and never multiply one another. Hence a sum of $S$ incoming primitives produces at most $C_4S$ output primitives.
+
+When the next future-complete hard grid is known, retain only the one-dimensional interval records needed to evaluate the emitted primitives at grid coordinates and at the images/inverse-images of those coordinates under the fixed family of unary maps. There are $O(m)$ such records per emitted primitive. Thus the state size is $O(S'm)$. The monotone-calculus construction and record rebuild give the stated $O(S(N+m)\log(N+m))$ conservative time bound (linear after sorting). Finally, \eqref{eq:tower} supplies semantic recursive correctness: all fine geometry discarded by conditional expectation is invisible to every admissible descendant mask before the next compression.
+\end{proof}
+
+\begin{corollary}[Grounded four-dimensional simplification lemma] \label{cor:simplification}
+Let $\Gamma$ be a recursion cell, let $E$ be all orthants locally one- or two-sided in $\Gamma$, and let $H$ be the $m$ remaining hard orthants.  If the incoming compressed state has $S$ primitives and total fine breakpoint complexity $N_0$, and the merged staircases generated by $E$ have complexity $N_E$, then with $N=N_0+N_E$ one compression produces at most $C_4S$ primitives with $O(C_4Sm)$ interval/prefix records in
+\[
+O(S(N+m)\log(N+m))
+\]
+time, linear in the corresponding event-list sizes after sorting.  The resulting state agrees with the uncompressed residual on every region measurable in the future-complete hard grid and may be used recursively.
+\end{corollary}
+
+This is the grounded-$4$D product-measure replacement for the role played by Chan's periodic basic-function simplification.  The stronger claim that the primitive count can always be reduced back to a dimension-dependent constant after every compression is \emph{not} needed here and is not asserted.
+
+
+\section{General fixed-dimensional pair elimination}             \label{sec:generalpair}
+
+The four-dimensional derivation suggests a general variable-elimination calculus. The robust invariant is a bounded list of decorated pair predicates together with split unary weights. Opposite orientations are not merged unless an implementation also performs exact run decomposition. This keeps the mathematical core conservative while allowing the tested hill/valley/zigzag optimization as an exact extension.
+
+\begin{definition}[Bounded decorated pair-list term]          \label{def:pairterm}
+Fix $p$ and a list bound $\kappa$. A weighted pair-list term in variables $\xi=(\xi_1,\ldots,\xi_p)$ is
+\begin{equation}
+\Phi(\xi)=\prod_{i=1}^p q_i(\xi_i)
+          \prod_{e\in E}\mathbf 1[\xi_{j_e}\,\triangleleft_e\, f_e(\xi_{i_e})],       \label{eq:pairterm}
+\end{equation}
+where each $f_e$ is a monotone step map, $\triangleleft_e$ is a decorated strict/non-strict comparison, and at most $\kappa$ predicates are stored for each ordered variable pair. The unary weight $q_i$ is \emph{split}: it has a separate anchor value $q_i^{(0)}$ and a right-continuous positive-axis step density $q_i^{(+)}$. Under $d\mu_i=a_i\,d\delta_0+c_i\,dt$ its one-dimensional mass is
+\[
+a_iq_i^{(0)}+c_i\int_{(0,M_i]}q_i^{(+)}(t)\,dt.
+\]
+EMPTY, FULL, infinities, and endpoint openness are symbolic states, not numerical sentinels. A state is a signed sum of such terms; its fine complexity is the total number of unary and pair-map breakpoints over all terms.
+\end{definition}
+
+\begin{remark}[Compact nonmonotone boundaries]
+The theorem itself may keep opposite-orientation predicates as a list. An implementation may instead compact a fixed list into a one-turn or finite-turn boundary. Such a boundary must be inverted to a \emph{finite union} of decorated feasible runs and split exactly by run index. Hills, valleys and zigzags are therefore optimizations of the list representation, not additional logical primitives. The audit implementation performs this run splitting and found no abstentions through the tested range.
+\end{remark}
+
+\subsection{Decorated run inversion}
+
+Let $x$ be the variable to be eliminated and let $I_x=[0,M_x]$ be its bounded physical interval. For fixed surviving variables, an incident monotone predicate gives one decorated feasible interval in $x$. If a compact finite-turn boundary is used, inversion gives a finite union
+\[
+\mathcal I_e(z)=\bigsqcup_{r=1}^{R_e(z)} I_{e,r}(z)
+\]
+of decorated runs. Short pieces are padded by degenerate empty runs $[c,c)$ so that run index is a well-defined symbolic branch. Intersecting several unions expands over choices of one run from each incident predicate; for the bounded grammar used at fixed dimension this contributes only a dimension/grammar constant. In the conservative monotone-list theorem every $R_e=1$.
+
+Four conventions are load-bearing.
+\begin{enumerate}
+\item \textbf{EMPTY is not zero.} An empty run is encoded as $[c,c)$, which has mass exactly zero under both Lebesgue and magnitude measures. In particular, $\sup\emptyset$ is never represented by the anchor value $0$.
+\item \textbf{Lower decorations are complemented in cumulative differences.} If $Q$ is a decorated cumulative record, the mass of a feasible run is $Q(U)-Q(L^-)$, where $L^-$ subtracts strictly below an included lower endpoint and through an excluded lower endpoint.
+\item \textbf{The anchor is a separate weight component.} A decorated inversion that is left-continuous in the surviving variable is represented on $(0,M]$ by the usual right-continuous step records and at $0$ by a separate anchor branch. This prevents a right-continuous surrogate from assigning the wrong mass to $\{0\}$.
+\item \textbf{Infinite/full bounds are clamped only at measure evaluation.} In active-bound comparisons $\pm\infty$ retain their ordering meaning. They are replaced by the physical floor/ceiling only when a run mass is evaluated, preventing $0\cdot\infty$ and NaNs without corrupting label ownership.
+\end{enumerate}
+
+\begin{lemma}[One-variable elimination]                          \label{lem:oneelim}
+Fix $p$, $\kappa$, and the dimension-bounded run grammar. There exist constants $B_{p,\kappa}$ and $\kappa'_{p,\kappa}$ such that integrating one variable of a weighted decorated pair-list term produces a signed sum of at most $B_{p,\kappa}$ terms of the same class in the remaining $p-1$ variables. The constants depend only on the fixed grammar, not on $n,m$ or the staircase resolution. The total output breakpoint complexity is $O_{p,\kappa}(N)$ and the construction is linear after the relevant event lists are sorted.
+\end{lemma}
+
+\begin{proof}
+Let $x$ be eliminated. Each incident predicate yields a bounded number of decorated runs. Expand the finite product of run choices; its size is a grammar constant. For one run choice, intersect the selected intervals with the physical ground interval. The feasible set is one decorated interval
+\[
+L(z)\prec x\preceq U(z),
+\]
+possibly empty, whose lower and upper endpoints are chosen from finite candidate lists $\mathcal L,\mathcal U$. The numbers of candidates are $O_{p,\kappa}(1)$.
+
+Partition the surviving-variable space by the active lower and upper candidates using a deterministic first-winner rule. If lower candidate $\ell_r$ wins, require $\ell_r>\ell_i$ for earlier candidates and $\ell_r\ge\ell_i$ for later candidates. If upper candidate $u_s$ wins, require $u_s<u_i$ for earlier candidates and $u_s\le u_i$ for later candidates. Together with the decorated feasibility comparison $\ell_r\prec u_s$, these labels are disjoint and exhaustive.
+
+Every label comparison is between unary endpoint maps. A comparison involving different surviving variables becomes another decorated pair predicate; a same-variable comparison becomes a unary $0/1$ filter and contributes breakpoints but no extra primitive. On the positive axis, the run mass is the decorated cumulative difference
+\[
+Q^+(u_s)-Q^+(\ell_r^-).
+\]
+The anchor contribution is evaluated separately from $q_x^{(0)}$ according to whether $0$ belongs to the feasible run. Hence one label/run choice emits only a constant number of weighted terms. Multiplying by the dimension-bounded number of run choices and labels gives $B_{p,\kappa}=O_{p,\kappa}(1)$ independently of staircase resolution.
+
+For breakpoint complexity, inversion and comparison use merged event lists; run splitting partitions rather than multiplies a one-dimensional list; and composition with a step endpoint changes values only where that endpoint changes. Each input map is copied into only $O_{p,\kappa}(1)$ descendants. Thus the total output complexity is $O_{p,\kappa}(N)$ and, with sorted lists, all constructions are merge scans.
+\end{proof}
+
+\begin{corollary}[Pair elimination]                             \label{lem:pairelim}
+For fixed $p$ and fixed incoming grammar, eliminating two variables produces a signed sum of $O_p(1)$ terms in $p-2$ variables with total breakpoint complexity $O_p(N)$. It suffices to apply Lemma~\ref{lem:oneelim} twice. The direct two-dimensional strict-staircase formula from the $4D$ section is an optimization that lowers constants, not a prerequisite for closure.
+\end{corollary}
+
+\begin{remark}[What is and is not bounded]
+The candidate count, first-winner label count, number of run choices, and number of cumulative pieces emitted per label are all bounded by the fixed grammar. Hence the raw branching factor of one elimination is independent of staircase resolution. Same-variable alternations are stored in unary filters and charged to breakpoint complexity rather than primitive count.
+\end{remark}
+
+\begin{remark}[Breakpoint complexity along an elimination chain]
+If $N_t$ is the total breakpoint complexity after elimination $t$, Lemma~\ref{lem:oneelim} gives $N_{t+1}\le A_tN_t$ for a dimension/grammar constant $A_t$. A fixed-dimensional chain has finite length, so
+\[
+N_{\rm final}\le\left(\prod_tA_t\right)N_0=O_d(N_0).
+\]
+This is a statement about asymptotic input-size dependence; the constants can be large.
+\end{remark}
+
+\subsection{Compression in arbitrary fixed dimension}
+
+Let $G_i=\{g_{i,0}<\cdots<g_{i,k_i}=M_i\}$ be a future-complete physical grid and add a symbolic sentinel $g_{i,k_i+1}>M_i$. For the new grid-location variable $y_i$, let $\ell_i(y_i),r_i(y_i)$ be the left and right endpoints of the right-open cell
+\[
+C_i(y_i)=[\ell_i(y_i),r_i(y_i))\cap[0,M_i].
+\]
+Both endpoint maps are right-continuous steps and the anchor belongs to the first cell. For one current term $F(x)$ the numerator of the cell average is
+\begin{equation}
+N_F(y)=\int F(x)\prod_{i=1}^d
+\mathbf1[\ell_i(y_i)\le x_i<r_i(y_i)]\,d\mu(x).       \label{eq:generalcompression}
+\end{equation}
+Before integration this is one decorated pair-list term in the $2d$ variables $(x,y)$. Eliminate the old variables $x_1,\ldots,x_d$ with Lemma~\ref{lem:oneelim}. Let $C_d^{\rm emit}$ be the product of the one-variable raw branching constants in one compression. A deliberately loose bookkeeping bound is
+\[
+C_d^{\rm emit}\le2^{O(d^3)}.
+\]
+Dividing by
+\[
+\prod_{i=1}^d\mu_i(C_i(y_i))
+\]
+changes only split unary weights.
+
+\begin{theorem}[One-compression product-measure closure]       \label{thm:generalsimplification}
+Fix $d$ and the normalized grounded grammar. If the incoming state has $S$ terms and total fine breakpoint complexity $N$, then one compression emits at most
+\[
+S_{\rm raw}'\le C_d^{\rm emit}S
+\]
+terms of the same decorated pair-list class. With $m$ hard orthants remaining, the raw representation uses $O_d(S_{\rm raw}'m)$ one-dimensional records and can be constructed in
+\[
+O_d\!\left((N+Sm)\log(N+m)\right),
+\]
+or $O_d(N+Sm)$ after sorting. The resulting conditional expectation is exactly equivalent to the fine state on every region measurable in the future-complete grid.
+\end{theorem}
+
+\begin{proof}
+Apply \eqref{eq:generalcompression} independently to each incoming term and eliminate the old variables. The finite chain of dimension/grammar branching constants gives the raw emission bound, and the finite-chain breakpoint argument gives $O_d(N)$ fine symbolic complexity before grid coarsening. Each grid endpoint map takes $O(m)$ values; a dimension-only family of images and inverse images therefore contributes $O_d(m)$ stored coordinates per emitted term.
+
+For semantic correctness, let $\bar F=\mathbf E[F\mid\mathcal G]$. If the parent grid is future-complete, every mask used before the next compression is $\mathcal G$-measurable. For a descendant grid $\mathcal G'$, the tower property gives
+\[
+\mathbf E[FB\mid\mathcal G']=\mathbf E[B\bar F\mid\mathcal G'].
+\]
+The future-complete hypothesis is essential.
+\end{proof}
+
+\paragraph{Raw emission versus held state.}
+$C_d^{\rm emit}$ bounds what the constructor emits from one incoming term; it is not a sharp model of practical state size. The implementation canonically merges identical normalized grid-measurable terms while they are emitted. Let $S_{\rm hold}$ denote the number retained after this incremental merge. Trivially $S_{\rm hold}\le S_{\rm raw}'$, but no sharper general theorem is claimed here. In the current audit the difference is dramatic: one compression emitted 450 terms from one $d=4$ input term and 78305 from one $d=6$ input term, whereas across two nested compression generations the merged $d=6$ state actually shrank. This motivates a separate grid-resolution bound on $S_{\rm hold}$, but the present asymptotic proof does not use an unproved such bound.
+
+Under the fixed-block Chan schedule used here, only $O_{d,\delta}(1)$ generic compression generations occur on a root-to-leaf macro-phase. Therefore even the raw bound compounds only into a dimension/$\delta$ constant, so the fixed-dimensional asymptotic recurrence remains unchanged. Incremental merging is nevertheless essential in practice: postponing it can require memory proportional to the enormous raw emission.
+
+\subsection{Six and eight dimensions}
+
+The static elimination chains are
+\[
+6D\longrightarrow O_6(1)\times4D\longrightarrow O_6(1)\times2D,
+\]
+and
+\[
+8D\longrightarrow O_8(1)\times6D\longrightarrow O_8(1)\times4D\longrightarrow O_8(1)\times2D.
+\]
+The cutting argument is unchanged, so the mathematical fixed-dimensional recurrence remains
+\begin{equation}
+\boxed{T_d(n)=\widetilde O_d(n^{d/3}).}                         \label{eq:generaltime}
+\end{equation}
+This is a simplification of Chan's existing exponent, not an $n^{d/4}$ result.
+
+\paragraph{Current computational validation.}
+The attached verification package reports exact elimination against product-grid oracles for $p=2,3,4,5,6,8$ on fine grids and for $p=9,10,12$ on coarser grids, under both Lebesgue and magnitude product measures, with zero abstentions. Hills, valleys, zigzags and mixed finite-turn boundaries are checked through the smaller dimensions, with valleys through $p=7$. The $2d$-variable compression is exact in $d=4$ and $d=6$ under both measures, and two nested compression generations are reported exact in dimensions $2,3,4,6$. Compression in $d=8$ requires $p=16$ and has not been tested; neither have more than two higher-dimensional compression generations.
+
+\begin{remark}[Magnitude as a verification oracle]
+Of the implementation defects found in the audit, most endpoint/anchor bugs were invisible under Lebesgue measure and exposed by the magnitude atom at zero. One decorated-comparison defect was wrong under Lebesgue as well and survived only because the test generator initially exercised too few decorations. Both lessons matter: keep the magnitude oracle, and vary all strict/non-strict comparison types.
+\end{remark}
+
+\section{Precise complexity of the four-dimensional specialization}
+
+Let $S$ be the number of incoming primitives at a compression point, $N$ the total fine breakpoint complexity of the current state plus newly absorbed easy staircases, and $m$ the number of hard orthants surviving in the cell. Distinguish the \emph{raw} number of terms emitted by the constructor from the \emph{held} number after canonical incremental merging.
+
+\begin{proposition}[Per-compression complexity]                   \label{prop:complexity}
+For fixed $d=4$ there is a dimension-only raw emission constant $C_4^{\rm emit}$ such that
+\begin{itemize}[leftmargin=2em]
+\item raw emitted terms: $S_{\rm raw}'\le C_4^{\rm emit}S$;
+\item raw symbolic storage: $O(S_{\rm raw}'m)$ interval/prefix records;
+\item conservative raw build time: $O(S(N+m)\log(N+m))$, or $O(S(N+m))$ after sorting;
+\item after canonical incremental merging, the held count $S_{\rm hold}$ satisfies only the trivial theorem $S_{\rm hold}\le S_{\rm raw}'$; no sharper general bound is claimed;
+\item a prefix or cell query over the held representation costs $O(S_{\rm hold}\log m)$ in the generic derived-coordinate case, and $O(S_{\rm hold})$ when all required ranks are registered.
+\end{itemize}
+\end{proposition}
+
+The audit shows why this distinction matters. Raw emission from one incoming term was measured at 450 terms in $d=4$ and 78305 terms in $d=6$. In two-generation nested-grid tests the second raw emission could be hundreds of times larger than the merged state, while the merged $d=6$ state shrank under both measures. Thus canonical merging is not cosmetic for software; it should be applied incrementally as terms are produced. The current prototype's canonical merge is a practical cost centre, and a sharper grid-resolution bound on the number of distinct held terms remains an interesting implementation theorem.
+
+For the asymptotic argument of this note, however, the raw emission bound is sufficient under the same fixed-block scheduling convention used in the audited Chan implementation: only $O_{\delta}(1)$ generic compression generations occur on a root-to-leaf macro-phase. Hence repeated multiplication by the dimension-only raw branching constant changes only the hidden fixed-dimensional constant. Keeping Chan's weighted-median cutting unchanged gives
+\begin{equation}
+T(N)\le O(r^4)T(N/r^3)+O(r^4N\log^{O(1)}N),                   \label{eq:newrec}
+\end{equation}
+and therefore
+\begin{equation}
+\boxed{T(N)=\widetilde O(N^{4/3}).}                            \label{eq:newtime}
+\end{equation}
+The result is a simplification of Chan's symbolic machinery, not an improved exponent.
+
+\section{Mapping to \texttt{FastHVChan}}
+
+The existing repository~\cite{FastHVChan} is unusually suitable for an A/B test because the major operations are already separated.
+
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.29\textwidth} >{\raggedright\arraybackslash}p{0.61\textwidth}}
+\toprule
+Current component & Proposed grounded-$4$D replacement \\
+\midrule
+\texttt{\_absorb} & Keep essentially unchanged; it already merges slabs and two-sided staircases. \\
+\texttt{Term}/\texttt{Step} conditions & Add an experimental constant-size \texttt{PrefixState}/\texttt{PrefixPrimitive} representation. \\
+\texttt{\_eliminate\_axis} & Retain for the legacy path; do not use in the experimental prefix compressor. \\
+\texttt{compress\_terms} & Build shared $O(m)$ prefix records, evaluate 16 corners per grid cell when needed, and discard fine events. \\
+Cutting recursion & Leave unchanged, so node counts and cut coordinates should match the legacy grounded path. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The production backend should remain restricted to the audited $d=4$ path until the $2d$-variable compression constructor has been tested at $p=12$ and $p=16$.  The generic elimination calculus is already exact-oracle tested through $p=8$, but that validates only the static elimination chain for $d\le8$.  A later higher-dimensional backend should implement the monotone predicate-list representation directly; the current one-turn optimization must either split every two-run valley exactly or abstain and fall back.
+
+\section{Validation and audit status}
+
+The latest implementation audit is stronger than the earlier validation plan. Exact product-grid enumeration treats the anchor $\{0\}$ as its own cell, so magnitude is checked exactly rather than approximately. Every test is run under both Lebesgue and magnitude product measures.
+
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.32\textwidth} >{\raggedright\arraybackslash}p{0.52\textwidth}}
+\toprule
+Construction & Current exact-oracle status \\
+\midrule
+One-variable elimination & $p=2,3,4,5,6,8$ on fine grids; $p=9,10,12$ on coarser grids; zero abstentions. \\
+Finite-turn boundaries & hills, valleys, zigzags and mixed cases in low dimensions; valleys checked through $p=7$. \\
+Compression numerator & exact in $d=4$ ($p=8$) and $d=6$ ($p=12$), both measures. \\
+Recursive reuse & two nested compression generations exact in $d=2,3,4,6$, both measures. \\
+Not yet tested & $d=8$ compression ($p=16$), more than two higher-dimensional generations, and an end-to-end higher-dimensional FastHVChan backend. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The audit found six report-level defects that could produce silently wrong numbers: non-closed single-predicate normalization, interval/run inversion, unsafe EMPTY encodings, tie double counting, left-continuous decorated inversions, and a left-continuous grid-cell family. The report now incorporates all six repairs. It also found that the raw emission constant is a poor predictor of practical state size; the held state after canonical merging is the quantity relevant to implementation memory. This note therefore states raw-emission and held-state quantities separately.
+
+Two methodology lessons deserve emphasis. First, magnitude is a powerful verification oracle: the anchor atom reveals endpoint mistakes that Lebesgue measure can hide. Second, magnitude is not sufficient by itself: one representation defect was also wrong under Lebesgue measure and survived only because the test generator initially exercised too few decorated comparison types. A robust suite must vary both the measure and all strict/non-strict decorations, and must reject NaNs explicitly.
+
+\section{Status, limitations and interpretation}
+
+The general elimination calculus is now implemented far beyond the original $4D$ base case, and no counterexample has been found in the tested range. The mathematical statement should nevertheless remain narrower than ``all higher-dimensional software is done.'' The static elimination chain is validated through $p=12$; compression, which lives in $2d$ variables, is validated through $d=6$; and only two compression generations have been tested. The $d=8$ compressor and deeper recursive chains remain open validation targets.
+
+The theoretical closure theorem uses the conservative bounded-list grammar and raw emission constant $C_d^{\rm emit}$. The optimized finite-turn implementation is exact only because every inversion is decomposed into decorated runs and every run combination is carried as its own signed branch. A future implementation that silently drops a nonrepresentable run is incorrect; abstention or exact splitting is mandatory.
+
+The report does not claim a sharp bound on the number of distinct canonical terms held after merging. The audit strongly suggests that this quantity is governed by grid resolution rather than by the enormous raw emission constant, but turning that observation into a useful theorem remains open. This affects practical memory and constants, not the fixed-dimensional exponent proved under the stated block schedule.
+
+\section{Conclusion}
+
+Magnitude led to the product-measure viewpoint by turning projected hypervolumes into ordinary mass for a measure with one Dirac atom and one continuous component per coordinate. The Dirac factors are not formal decoration: they pin coordinates to zero, which equals projection only because dominated regions are downward closed, and they expose endpoint mistakes that Lebesgue measure can miss.
+
+The corrected elimination calculus is based on decorated pair lists, split anchor/continuous unary weights, finite-run inversion, deterministic active-bound ties, and right-open conditioning cells. One-variable elimination is the fundamental closure operation; pair elimination is simply two applications, with the special $2D$ staircase formula retained as a lower-constant optimization. For fixed dimension, one compression emits only a dimension-dependent number of descendants per incoming term and preserves linear breakpoint dependence on the input size.
+
+Compression is exact by conditional expectation on a future-complete grid. The raw emission bound is sufficient for Chan's fixed-block asymptotic analysis, so the cutting recurrence and $\widetilde O_d(n^{d/3})$ exponent remain unchanged. Practical implementations should merge canonical grid-measurable terms incrementally: the audit shows that the held state can be orders of magnitude smaller than the raw emission. Compression is exact-oracle validated through $d=6$ and two nested generations; $d=8$ compression and a sharp held-state/grid-resolution theorem are the next natural targets.
+
+\section{Detailed proof of the strict staircase prefix formula}       \label{app:twobranch}
+
+Let
+\[
+D_f=\{(x,y):y<f(x)\}
+\]
+with nonincreasing $f$.  For fixed $x$, the admissible target prefix is
+\[
+[0,B]\cap[0,f(x)).
+\]
+Its mass equals $Y_{\le}(B)$ on the decorated prefix $\Theta_f(B)=\{x:B<f(x)\}$ and equals $Y_{<}(f(x))$ outside it.  Therefore
+\[
+\begin{aligned}
+C_f(A,B)
+&=Y_{\le}(B)X(I_A\cap\Theta_f(B))
+  +P(I_A)-P(I_A\cap\Theta_f(B))\\
+&=P(I_A)+X(I_A\cap\Theta_f(B))Y_{\le}(B)
+  -P(I_A\cap\Theta_f(B)),
+\end{aligned}
+\]
+which proves \eqref{eq:twobranch}.  If $I_A$ is entirely contained in $\Theta_f(B)$ this is the product branch; if $I_A$ extends past its endpoint, the saturated correction depends only on $B$.  EMPTY is a separate interval state: under magnitude it has mass zero, while the singleton $\{0\}$ has mass one.
+
+\section{Detailed threshold-antiderivative proof}                  \label{app:thresholdproof}
+
+Lemma~\ref{lem:threshold} is most naturally proved with interval objects.  For one threshold, monotonicity makes the feasible set a prefix or suffix.  Store EMPTY, FULL, or a finite endpoint plus an open/closed flag.  Intersecting a fixed number of such sets with the query prefix is a constant-time operation on decorated bounds and yields the exact interval $J(u,v,t)$; integration gives \eqref{eq:intervalthreshold}.
+
+To obtain the latent normal form, partition the $(u,v)$ plane according to which lower endpoint is maximal and which upper endpoint is minimal.  There are only constantly many candidates.  On each branch the integral is a difference of unary cumulative functions.  If the active endpoints depend on different latent variables, the feasibility comparison is between monotone functions of $u$ and $v$ and therefore contributes one monotone latent boundary.  Intersections of same-orientation boundaries remain monotone; one increasing and one decreasing restriction gives the one-turn class.  Complements create only a constant signed expansion.
+
+The distinction between EMPTY and the numerical endpoint zero is essential because the magnitude measure has an atom at the global anchor, but using decorated bounds uniformly also makes the Lebesgue and magnitude implementations share the same logic.
+
+\section{Details of the four-prefix normal form}                   \label{app:prefix}
+
+For target point $q=(u,v)$ let $R_3(u)=\{x:u<f_{13}(x)\}$ and $R_4(v)=\{x:v<f_{14}(x)\}$ be decorated source prefixes, and let $\rho_3(u),\rho_4(v)$ denote their decorated right bounds.  Then the feasible source prefix for the $r$-constraints is $R_3(u)\cap R_4(v)$, whose right bound is the decorated minimum of $\rho_3(u)$ and $\rho_4(v)$.  Define $\rho(q)$ by this intersection, and define $\sigma(q)$ analogously from $s$.
+
+The selector region in which the $R_3$ bound is active is the decorated comparison $\rho_3(u)\preceq\rho_4(v)$.  This is an order-monotone region in $(u,v)$ and is therefore separated by a nondecreasing step boundary.  The same holds for the selector of $\sigma$.  No numerical evaluation such as $f_{14}(\rho_3(u))$ is required on a plateau or EMPTY bound.
+
+The source-staircase branch is determined by whether the $x_2$-prefix $S(q)$ is contained in the strict feasible prefix induced by $f$ at the active $x_1$ bound $R(q)$.  In decorated-bound language this is one monotone comparison between the two source-prefix bounds.  Relaxing $q$ componentwise can only enlarge both $R(q)$ and $S(q)$, while the feasible $f$-prefix changes monotonically, so the branch region is downward closed and has a nonincreasing frontier.
+
+Expanding source caps $a,b$ yields only anchored target rectangles whose corners are obtained from $r(a)$, $s(b)$ and a constant number of decorated inverse/image maps induced by $f$.  Multiplication by such rectangle indicators merely caps $(u,v)$ coordinatewise. Equation~\eqref{eq:twobranch} shows that after this expansion only the basis
+\[
+1,\ X(\rho),\ P(\rho),\ Y(\sigma),\ Q(\sigma),\ X(\rho)Y(\sigma)
+\]
+is required. Expanding $\rho$ and $\sigma$ according to their selector regions turns each basis element into a constant sum of separable factors $\alpha(u)\beta(v)$ times indicators below nondecreasing boundaries. The target $g$ and the source-branch frontier are nonincreasing boundaries. Intersecting all increasing boundaries gives one nondecreasing $h^\uparrow$; intersecting all decreasing boundaries gives one nonincreasing $h^\downarrow$. This yields primitive \eqref{eq:J}.
+
+For hard coordinate samples, every cap in the primitive is a minimum of operands drawn from the hard coordinates and from their images under a constant family of monotone maps.  Those images may be new numerical values, but there are only $O(m)$ of them.  The minimum then chooses one of these operands, so $O(m)$ sample coordinates suffice on each target axis for one primitive. The decorated-threshold evaluation of Lemma~\ref{lem:threshold} needs only cumulative arrays $A,R,\Gamma$ and decorated inverse-bound samples at those coordinates, proving the shared $O(m)$ representation for one primitive.
+
+\section{Constructive parametric re-expression}              \label{app:closure}
+
+This appendix spells out the constructor behind Lemma~\ref{lem:parametricclosure}.  Start from one primitive
+\[
+T(x)=q(x)E(x)J_{\alpha,\beta,h}(C(x),D(x))
+\]
+and expand $J$ into latent variables $(u,v)$.  For fixed $(u,v)$, every latent cap becomes a unary threshold on one physical coordinate.  Together with the current cell, the feasible set on coordinate $x_i$ is an interval whose endpoints come from a constant candidate set: cell endpoints, inverse images of $u$, inverse images of $v$, and constants.  EMPTY/FULL and endpoint openness are part of the interval object.
+
+Expand the four physical intervals by finite differences, producing at most $16$ prefix boxes.  Apply the static four-prefix template to each.  After substituting the selected candidate endpoints, the resulting expression consists of separable unary factors and pairwise comparisons among the six variables
+\[
+z_1,z_2,z_3,z_4,u,v.
+\]
+Normalize these comparisons as follows.
+\begin{center}
+\begin{tabular}{p{0.30\textwidth}p{0.58\textwidth}}
+\toprule
+comparison type & destination in the emitted primitive \\
+\midrule
+same variable & absorb its indicator into the corresponding unary step density; it may add breakpoints but no primitive \\
+physical--physical & decorated generalized inversion gives a grounded two-sided staircase; append to $E'(z)$ \\
+$u$--physical & rewrite as $u\prec c_i(z_i)$; append positive occurrences to $C'(z)=\min_i c_i(z_i)$ \\
+$v$--physical & rewrite as $v\prec d_i(z_i)$; append positive occurrences to $D'(z)=\min_i d_i(z_i)$ \\
+$u$--$v$ & rewrite on a monotonicity piece as $v\prec k(u)$; collect increasing $k$ into $h'^{\uparrow}$ and decreasing $k$ into $h'^{\downarrow}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+A complemented cross-variable condition is expanded as $1-\1[\cdot]$.  Since the grammar contains only a fixed number of cross-variable comparisons, complement expansion increases the number of signed branches by only a dimension-dependent constant.
+
+After normalization, every branch is exactly
+\[
+q'(z)E'(z)
+J_{\alpha',\beta',h'}(C'(z),D'(z)),
+\]
+with
+\[
+h'(u)=\min\{h'^{\uparrow}(u),h'^{\downarrow}(u)\}.
+\]
+This is an output primitive of the original class.  If $R_0$ is the number of static normal-form pieces, $K_0$ the maximum number of endpoint candidates, and $L_0$ the maximum number of complemented cross-parameter comparisons, then one may take the crude dimension-only bound
+\[
+C_4\le 16R_0K_0^8 2^{L_0}.
+\]
+The numerical value is irrelevant for asymptotics; what matters is the absence of $N,m,n$.
+
+Same-variable comparisons deserve emphasis.  Two monotone step functions of the same orientation may alternate many times.  We do not split those alternations into separate primitives: the comparison indicator is stored as one unary step filter.  Its breakpoints are charged to unary complexity.  Since only a fixed family of unary maps is involved, generalized inversion, monotone composition, and same-orientation min/max preserve linear total breakpoint complexity by Corollary~\ref{cor:linearcalc}.
+
+When the next future-complete hard grid is known, evaluate each emitted four-prefix expression only at the predecessor/successor maps of that grid.  The cell average is the 16-corner finite difference divided by the product cell mass.  Rebuild the cumulatives of each output primitive as $O(m)$ interval records, storing local step data and left-endpoint cumulative values, and discard all old fine events.  Monotone images/inverse-images of hard coordinates may be new numerical values, but a constant family of unary maps produces only $O(m)$ such derived values.
+
+Semantic correctness follows independently from conditional expectation.  If $\bar F=\E[F\mid\mathcal G]$, the parent grid is future-complete, and a newly easy mask $B$ is $\mathcal G$-measurable, then for every coarser descendant grid $\mathcal G'$,
+\[
+\E[FB\mid\mathcal G']
+=\E[\E[FB\mid\mathcal G]\mid\mathcal G']
+=\E[B\bar F\mid\mathcal G'].
+\]
+Thus the constructor gives representation closure while the tower identity gives recursive semantic closure.
+
+
+\section{Detailed active-bound proof of one-variable elimination}        \label{app:pairelim}
+
+We record the construction behind Lemma~\ref{lem:oneelim}. Let $x$ be eliminated from a $p$-variable pair-list term and let $z$ denote the survivors. The proof is easiest on the positive axis; the anchor is then added as a separate scalar contribution.
+
+For every incident predicate, decorated inversion produces either one interval (for the conservative monotone-list grammar) or a bounded finite union of intervals (for the compact finite-turn optimization). Enumerate the dimension-bounded run choices. For one choice, write the selected lower and upper endpoint candidates as $\mathcal L=(\ell_1,\ldots,\ell_r)$ and $\mathcal U=(u_1,\ldots,u_s)$, including the physical ground interval. The actual positive-axis feasible interval is governed by
+\[
+L(z)=\max_i\ell_i(z),\qquad U(z)=\min_j u_j(z).
+\]
+EMPTY pieces use a degenerate interval $[c,c)$; FULL pieces retain symbolic infinities until measure evaluation.
+
+Choose the active lower and upper endpoints with the first-winner tie convention
+\[
+\ell_i>\ell_h\;(h<i),\qquad \ell_i\ge\ell_h\;(h>i),
+\]
+and
+\[
+u_j<u_h\;(h<j),\qquad u_j\le u_h\;(h>j).
+\]
+Together with decorated feasibility these labels are mutually disjoint and exhaustive. Comparisons between endpoint maps on different surviving variables become pair predicates; same-variable comparisons become unary filters.
+
+Let $Q_x^+$ be the cumulative of the positive-axis step weight. On one label/run choice, the continuous mass is
+\[
+Q_x^+(u_j)-Q_x^+(\ell_i^-),
+\]
+where the lower decoration is complemented. The anchor mass is evaluated separately from $q_x^{(0)}$ by testing whether $0$ belongs to the feasible set. This split is essential when inversion is left-continuous in a surviving variable: no right-continuous step function on the positive axis can by itself encode an anchor-only branch.
+
+Symbolic infinities are clamped to the bounded ground floor/ceiling only in the cumulative evaluation. They remain infinite in the first-winner comparisons so a vacuous candidate cannot steal a label by tying the physical ceiling. The finite number of run choices, labels and cumulative pieces gives a raw branching constant depending only on the fixed grammar.
+
+For breakpoint complexity, inversion and same-variable comparison use merged one-dimensional event lists; run splitting partitions those lists; and cumulative composition introduces changes only where an endpoint changes. Each input map is copied into only a dimension/grammar constant number of descendants. Hence one elimination has $O_{p,\kappa}(N)$ total output breakpoint complexity and a fixed chain has $O_d(N)$ complexity.
+
+\section{General-dimensional recurrence}                         \label{app:generaldrecurrence}
+
+For one compression in dimension $d$, start from the $2d$-variable integrand \eqref{eq:generalcompression}. Let $B_t$ be the raw branching constant of elimination $t$, including the bounded run-choice factor, first-winner labels, continuous cumulative pieces and possible anchor branch. The one-compression raw emission factor is
+\[
+C_d^{\rm emit}:=\prod_{t=0}^{d-1}B_t,
+\]
+which depends only on $d$ and the fixed grammar. A deliberately loose counting argument gives
+\[
+C_d^{\rm emit}\le2^{O(d^3)}.
+\]
+The measured constants are already large (450 in one $d=4$ test and 78305 in one $d=6$ test), so this estimate is bookkeeping rather than an implementation prescription.
+
+If $N_t$ is the total fine breakpoint complexity after elimination $t$, then $N_{t+1}\le A_tN_t$ for a dimension/grammar constant $A_t$. Since the chain has exactly $d$ eliminations,
+\[
+N_d=O_d(N_0).
+\]
+Thus staircase resolution affects running time linearly up to a fixed-dimensional factor; it does not enter the raw branching constant.
+
+The constructor should merge identical normalized grid-measurable terms incrementally. This can reduce the held state dramatically, but no sharper general bound on the held state is proved here. For the fixed-block schedule used in the asymptotic theorem, the number of generic compression generations on a root-to-leaf macro-phase is $O_{d,\delta}(1)$, so the raw emission factors can compound only a bounded number of times. Hence Chan's geometric recurrence remains
+\[
+T_d(N)\le O(r^d)T_d(N/r^3)+O_d(r^dN\log^{O(1)}N),
+\]
+and
+\[
+T_d(N)=\widetilde O_d(N^{d/3}).
+\]
+
+\section{Complexity recurrence}                                   \label{app:recurrence}
+
+For the four-dimensional specialization, Chan's analysis applies simplification after blocks of cutting levels.  One block creates $O(r^4)$ descendants and reduces the hard $(d-3)=1$-face weight in each by a factor $r^3$.  The constructive closure theorem contributes the primitive recurrence
+\[
+S_{j+1}\le C_4S_j.
+\]
+Under the fixed-block scheduling convention used for the theorem, only $O_{\delta}(1)$ compression generations occur on a root-to-leaf path.  Hence the dimension-only representation constants compound only a bounded number of times.  The report does not rely on a locally rescheduled generic compressor, for which list growth would require a separate analysis.
+
+Hence one block costs
+\[
+O(r^4N\log^{O(1)}N)
+\]
+including the prefix-state bookkeeping, and
+\[
+T(N)\le O(r^4)T(N/r^3)+O(r^4N\log^{O(1)}N).
+\]
+The same exponent calculation as Chan gives $T(N)=\widetilde O(N^{4/3})$.  The prefix compressor therefore preserves, rather than improves, the asymptotic guarantee.
+
+\begin{thebibliography}{9}
+
+\bibitem{Chan2013}
+T.~M. Chan,
+\newblock ``Klee's Measure Problem Made Easy,''
+\newblock in \emph{Proceedings of the 54th Annual IEEE Symposium on Foundations of Computer Science (FOCS)}, pp.~410--419, 2013.
+\newblock doi:10.1109/FOCS.2013.51.
+
+\bibitem{YildizSuri2012}
+H.~Y\i ld\i z and S.~Suri,
+\newblock ``On Klee's Measure Problem for Grounded Boxes,''
+\newblock in \emph{Proceedings of the 28th Annual Symposium on Computational Geometry (SoCG)}, pp.~111--120, 2012.
+\newblock doi:10.1145/2261250.2261267.
+
+\bibitem{LeinsterMeckes2017}
+T.~Leinster and M.~W.~Meckes,
+\newblock ``The Magnitude of a Metric Space: From Category Theory to Geometric Measure Theory,''
+\newblock in \emph{Measure Theory in Non-Smooth Spaces}, pp.~156--193, De Gruyter Open, 2017.
+\newblock doi:10.1515/9783110550832-005.
+
+\bibitem{Emmerich2026}
+M.~T.~M. Emmerich,
+\newblock ``The Magnitude of Dominated Sets: A Pareto Compliant Indicator Grounded in Metric Geometry,''
+\newblock arXiv:2604.18147, 2026.
+
+\bibitem{FastHVChan}
+M.~T.~M. Emmerich,
+\newblock \emph{FastHVChan: Exact hypervolume indicator computation via Timothy M. Chan}, public software repository, 2026.
+\newblock \url{https://github.com/emmerichmtm/FastHVChan}.
+
+\end{thebibliography}
+
+\end{document}

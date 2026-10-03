@@ -1,5 +1,10 @@
 # Problems with the pair-elimination report
 
+> **These items are addressed in the revised report**
+> (`paper/magnitude_chan_pair_elimination_report_audited.tex`). This file
+> describes the *pre-revision* text and is kept as the record of what was found.
+> See `AUDIT_RESPONSE.md` for where each item was answered.
+
 Report: *A Product-Measure and Magnitude Simplification of Chan's Hypervolume
 Algorithm*, section **General fixed-dimensional pair elimination**
 (`paper/magnitude_chan_pair_elimination_report.tex`, `\label{sec:generalpair}`).

@@ -7,6 +7,7 @@ with:
 ```bash
 python tests/test_elimination.py
 python tests/test_valley.py
+python tests/test_compression.py     # d = 6 takes about 3 minutes
 python complexity_probe.py
 ```
 
@@ -26,9 +27,8 @@ different variable counts. Keeping them apart is the difference between
 | static prefix chain, `\ref{cor:recursivepair}` | `p = d` | 4 | 6 | 8 |
 | compression numerator, `\eqref{eq:generalcompression}` | `p = 2d` | 8 | 12 | 16 |
 
-The static chain is exact at all three dimensions. The *variable count* for
-`d = 6` compression (`p = 12`) is now reached too, but the compression
-integrand itself has not been built.
+The static chain is exact at all three dimensions, and compression is exact at
+`d = 4` and `d = 6`. `d = 8` compression would need `p = 16`.
 
 ## Exactness against product-grid oracles
 
@@ -105,6 +105,65 @@ table — nothing abstains:
 | zigzag | 5 | 0.45 | yes | 168 | 0 |
 | zigzag | 6 | 0.35 | yes | 1324 | 6 |
 | zigzag | 7 | 0.30 | not measured | — | exceeded 9 min |
+
+## Compression, and the measured `C_d`
+
+The integrand of `\eqref{eq:generalcompression}` is built as one weighted
+monotone-pair term in the `2d` variables `(x, y)`, the `d` old variables are
+eliminated, and the result is divided by the cell masses. The check is the
+definition of the conditional expectation: for every cell `C` of the product
+grid, `N_F(y)` must equal the exact integral of `F` over `C`, for `y` in `C`.
+
+| d | p | instances | cells per instance | exact | output terms |
+|---|---|---|---|---|---|
+| 4 | 8 | 8 | 16 | yes, both measures | 450 |
+| 6 | 12 | 4 | 64 | yes, both measures | 78305 |
+
+Each cell is probed at its floor and its midpoint. The floor of the first cell
+is the anchor `0` — the one point where the cell convention can be wrong without
+Lebesgue noticing. An aggregate check sums the numerators over all cells and
+compares against the integral over the whole ground set, which catches
+double-counted or missed cells that per-cell checks cannot.
+
+Verified alongside, both structural rather than numeric:
+
+* `F_bar = N_F / mass` is a term in the same class. Only unary densities change,
+  exactly as the report says, because the cell mass is constant on each cell and
+  so is a step function of `y`.
+* Relabelling `y` back to the physical axes is a **pure rename**: no residual `x`
+  axis, no auxiliary variable. That is the substance of the closure claim, and
+  it is asserted by construction in `reindex_to_physical`, which raises if any
+  `x` survives.
+
+### `C_d` does not collapse
+
+`\ref{thm:generalsimplification}` gives `S' <= C_d S` with `C_d` a
+dimension-only constant, and `\ref{prop:complexity}` concedes that nothing
+proves a signed sum of distinct primitives can be merged back to a constant
+number. Measured, from **one** incoming term:
+
+| d | measure | raw output terms | after canonical merge | ratio |
+|---|---|---|---|---|
+| 4 | Lebesgue | 234 | 54 | 4.3× |
+| 4 | magnitude | 117 | 117 | 1.0× |
+| 6 | magnitude | 181135 | 40644 | 4.5× |
+
+Canonical merging is the only geometry-free merge available: add the
+coefficients of terms that are identical, drop what cancels. The merged state
+is still exact on every cell. It recovers a factor of 4.3–4.5× at best, and
+nothing at all in one case.
+
+So the open question in `\ref{prop:complexity}` resolves the unhelpful way:
+`C_6` is on the order of 10^4 per incoming term after merging, and it compounds
+across compression generations. The report's remark that "the constants can be
+large if the generic label enumeration is implemented literally" is correct and,
+on this evidence, understated — this is a literal implementation, and the
+constant is large enough that the practical recommendation to keep a specialized
+base case is not a convenience but a requirement.
+
+The asymptotics are untouched: `C_d` is independent of instance size, which is
+what the recurrence needs. This is a statement about the constant, not the
+exponent.
 
 ## Growth in instance size — the claim that matters
 
@@ -222,17 +281,23 @@ Established by measurement:
   `p = 6`;
 * breakpoints per term decrease along the elimination chain;
 * branching modest in `p`; state size is the cost driver;
-* run splitting is cheap: runs ≤ 2, branch products ≤ 64.
+* run splitting is cheap: runs ≤ 2, branch products ≤ 64;
+* compression exact at `d = 4` and `d = 6`, on every cell, both measures, with
+  `F_bar` in the class and the output free of any residual `x` variable;
+* `C_d` measured at 450 (`d = 4`) and 78305 (`d = 6`) per incoming term, with
+  canonical merging recovering only 4.3–4.5×.
 
 Not established:
 
 * branching independence at `p >= 6` with certainty — the mean is still rising
   at the resolutions reachable before the oracle becomes the bottleneck;
 * non-monotone exactness above `p = 7`, or zigzag cost above `p = 6`;
-* compression in `2d` variables above `d = 4` (`\eqref{eq:generalcompression}`),
-  multi-generation closure above `d = 4`, or the `S' <= C_d S` bound of
-  `\ref{thm:generalsimplification}`. `p = 12` reaches the *variable count* for
-  `d = 6`, but the compression integrand itself is not yet built;
-* `C_d` itself. With the report's own `B_p = 2^{O(p²)}` and `p <= 2d`, the chain
-  gives `C_d = 2^{O(d³)}`, which the report should state because it compounds
-  across compression generations.
+* compression above `d = 6`; `d = 8` needs `p = 16`;
+* **multi-generation closure above `d = 4`.** One generation is verified at
+  `d = 6`, and the output is structurally ready to feed back in
+  (`reindex_to_physical`), but a second generation has not been run. With
+  `C_6` measured at ~4 x 10^4 terms per incoming term, that is the measurement
+  most likely to show where this stops being practical;
+* a bound on `C_d` as a function of `d` from more than two data points. 450 at
+  `d = 4` and 78305 at `d = 6` is a ratio of 174 across a single step, which is
+  consistent with the report's `2^{O(d³)}` but establishes nothing.

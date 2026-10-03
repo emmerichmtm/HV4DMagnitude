@@ -11,7 +11,7 @@ abstentions, and with non-monotone boundaries of every shape. The
 problems are of three kinds, and they are not equally serious:
 
 * **Blocking** — the statement as written is false or unusable, and a reader
-  implementing from the text will get a wrong answer. Five of these.
+  implementing from the text will get a wrong answer. Six of these.
 * **Gap** — the claim appears true (I measured it) but the proof does not
   contain the argument. Three.
 * **Editorial** — correct but misleading, understated, or out of date. Three.
@@ -311,9 +311,10 @@ compression that uses it is tested only at `d = 4`".
 | B3 | blocking | EMPTY has no safe encoding; NaN survives zero-multiplication | repaired (degenerate `[c,c)`) |
 | B4 | blocking | label partition double-counts ties | repaired (first-winner) |
 | B5 | blocking | `upper != strict` inverts left-continuously; anchor needs its own weight | repaired (split weight + anchor branch) |
+| B6 | blocking | the cell family `(pi^-, pi^+]` is left-continuous in `y` and unrepresentable | repaired (right-open cells) |
 | G1 | gap | `B_p` independent of `N` asserted, not proved | measured, saturates |
 | G2 | gap | breakpoint growth along the chain not addressed | measured, decreases |
-| G3 | gap | `C_d = 2^{O(d^3)}` left implicit where it compounds | measured peak state |
+| G3 | gap | `C_d` left implicit where it compounds | **measured: 450 at `d=4`, 78305 at `d=6`; merging recovers only 4.5x** |
 | E1 | editorial | Lemma 3 redundant for closure | implementation uses Lemma 2 twice |
 | E2 | editorial | ceiling clamp missing from normalization, and its scope | repaired, scope documented |
 | E3 | editorial | validation status stale, but should stay narrow | — |

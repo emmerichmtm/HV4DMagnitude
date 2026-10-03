@@ -10,9 +10,9 @@ stays inside the class, with branching bounded by dimension alone.
 **Status: no counterexample found, and no abstentions remain.** The elimination
 calculus is exact against product-grid oracles at `p = 2..6, 8, 9, 10, 12` under
 both Lebesgue and magnitude product measures, and for non-monotone boundaries of
-every shape — hills, valleys, zigzags — through `p = 7`. Five blocking defects in
-the report's written statements were found and repaired to get there. The
-compression that *uses* the calculus is still validated only at `d = 4`.
+every shape — hills, valleys, zigzags — through `p = 7`. **Compression in `2d`
+variables is now built and exact at `d = 4` and `d = 6`.** Five blocking defects
+in the report's written statements were found and repaired to get there.
 
 * [`notes/REPORT_PROBLEMS.md`](notes/REPORT_PROBLEMS.md) — itemized problems
   with the report, by severity
@@ -49,8 +49,34 @@ and the distinction is the difference between "validated at `d = 8`" and
 | compression numerator | `p = 2d` | 8 | 12 | 16 |
 
 So the static chains behind `T_6 = Õ(n²)` and `T_8 = Õ(n^{8/3})` are tested at
-their own `p`. `p = 12` reaches the variable count for `d = 6` compression, but
-the compression integrand itself has not been built.
+their own `p`, and compression is now tested at `d = 4` and `d = 6` (`p = 8`
+and `p = 12`). `d = 8` compression would need `p = 16`.
+
+### Compression
+
+The integrand `\eqref{eq:generalcompression}` is built as one term in the `2d`
+variables `(x, y)`, the `d` old variables are eliminated, and the result is
+divided by the cell masses. The check is the definition of the conditional
+expectation, not a proxy: for every cell `C`, `N_F(y)` must equal the exact
+integral of `F` over `C`.
+
+| d | p | cells checked | exact | output terms (`C_d`) |
+|---|---|---|---|---|
+| 4 | 8 | 16 per instance | yes, both measures | 450 |
+| 6 | 12 | 64 per instance | yes, both measures | 78305 |
+
+Two structural claims verified alongside: `F_bar` is a term in the same class
+(only unary densities change, as the report says), and relabelling `y` back to
+the physical axes is a pure rename — no residual `x`, no auxiliary variable,
+which is the substance of the closure claim.
+
+**`C_d` is large.** 450 output terms at `d = 4` and 78305 at `d = 6`, from *one*
+incoming term. Canonical merging — adding the coefficients of identical terms,
+the only geometry-free merge there is — recovers a factor of 4.3× to 4.5×, and
+the merged state is still exact. That is direct evidence on the question
+`\ref{prop:complexity}` leaves open: the signed sum does **not** collapse back
+to a constant number in any useful sense, so the constant compounds across
+compression generations.
 
 ### Non-monotone boundaries
 
@@ -90,6 +116,7 @@ branch products never exceed 64.
 ```bash
 python tests/test_elimination.py
 python tests/test_valley.py
+python tests/test_compression.py     # d = 6 takes about 3 minutes
 python complexity_probe.py
 ```
 
@@ -99,10 +126,13 @@ python complexity_probe.py
 pair_state.py             weighted monotone-pair terms, decorated bounds,
                           split atom/continuous weights
 pair_elimination.py       the elimination constructor plus instrumentation
+compression.py            the 2d-variable compression integrand, cell grids,
+                          division by cell mass, canonical merging
 pair_oracles.py           exact product-grid enumeration (atom as its own cell)
 complexity_probe.py       branching vs instance size, and vs dimension
 tests/test_elimination.py elimination against the oracles
 tests/test_valley.py      non-monotone boundaries, run decomposition
+tests/test_compression.py compression against the conditional expectation
 notes/                    the audit, the problems list, and the task prompt
 ```
 

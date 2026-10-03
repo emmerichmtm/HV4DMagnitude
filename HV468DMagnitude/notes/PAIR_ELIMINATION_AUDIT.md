@@ -5,9 +5,10 @@ Hypervolume Algorithm* — generalized version with Section "General
 fixed-dimensional pair elimination"
 (`paper/magnitude_chan_pair_elimination_report.tex`).
 
-**Status: no counterexample found; the elimination calculus is implemented and
-exact at `p = 2,3,4,5,6,8` under both measures, with four blocking defects in
-the written statements repaired along the way.**
+**Status: no counterexample found. The elimination calculus is implemented and
+exact at `p = 2..6, 8, 9, 10, 12` under both measures, non-monotone boundaries
+included; compression in `2d` variables is exact at `d = 4` and `d = 6`. Six
+blocking defects in the written statements were repaired along the way.**
 
 The full itemized list of problems with the report, with severities, is in
 [`REPORT_PROBLEMS.md`](REPORT_PROBLEMS.md). The measured growth tables are in
@@ -31,8 +32,8 @@ under Lebesgue and under magnitude.
 | 6 | 12 | yes | 0 | 14 |
 | 8 | 8 | yes | 0 | 3 |
 
-This covers the static prefix chain for `d = 4, 6, 8`. It does **not** cover
-compression, which needs `p = 2d` and is therefore reached only at `d = 4`.
+This covers the static prefix chain for `d = 4, 6, 8`. Compression, which needs
+`p = 2d`, is covered separately at `d = 4` and `d = 6` -- see Finding 9.
 
 An earlier version of this table read 30/30, 18/30, 11/30, 1/6, **0/6** with 42
 abstentions. The difference is Findings 1–3 below.
@@ -186,7 +187,62 @@ surviving variable, so the atom is neither lost nor double-counted.
 All 32 combinations of shape, side, strictness and measure are now exact on a
 single predicate.
 
-## Finding 8 — the oracle has to be grid-aligned in values, not just breakpoints
+## Finding 8 — a constant bound is the degenerate case of Finding 7, and was missed
+
+Same family as Finding 7, found later and only by building compression. When a
+staircase has **no breakpoints at all**, the sampling helper ignored its
+`interior` flag and returned the anchor `0` as the representative of
+`[0, inf)`. With no breakpoints the single piece *is* `[0, inf)`, whose interior
+is `(0, inf)`, and any positive representative does -- returning `0` describes
+the anchor and then claims it holds everywhere.
+
+The consequence was concrete: a constant bound `f == 0`, i.e. the constraint
+`x_j <= 0`, was read as "every `x` is feasible" for every value of `x_j`. That
+invented mass on grid cells where the term is identically zero, so the
+compressed numerator was positive where the exact integral was `0`.
+
+Worth recording as its own finding because the general case was already fixed
+and tested: the shaped-boundary suite covers hills, valleys and zigzags, but
+every generated staircase there has at least one breakpoint. A degenerate
+constant slipped through a test suite that was otherwise looking straight at it.
+
+**Localized** by comparing partial states against a partially integrated oracle
+after each elimination, which named the exact variable whose elimination first
+disagreed. That technique is worth keeping: with 15966 terms in the state, no
+amount of staring at the output would have found it.
+
+## Finding 9 — compression in `2d` variables, and the size of `C_d`
+
+Not a defect; the construction the general theorem needs, now built and checked.
+The integrand of `\eqref{eq:generalcompression}` is one weighted monotone-pair
+term in the `2d` variables `(x, y)`; eliminating the `d` old variables and
+dividing by the cell masses gives the conditional expectation. Verified against
+the *definition* -- for every cell `C`, `N_F(y)` equals the exact integral of `F`
+over `C` -- at `d = 4` (16 cells) and `d = 6` (64 cells), both measures, zero
+abstentions. `F_bar` is a term in the same class, and relabelling `y` back to the
+physical axes is a pure rename with no residual `x`.
+
+One deliberate departure from the report. It writes cells as `(pi^-, pi^+]`,
+left-open; a family of `(a, b]` cells is left-continuous in `y`, so a
+right-continuous step cannot say which cell `y` falls in. That is harmless for
+`y > 0` and wrong at `y = 0`, where the magnitude atom has mass 1. Cells here
+are `[g_m, g_{m+1})` with the top boundary placed beyond the ceiling, so every
+cell carries the same decoration, the last closes by the ground set, and the
+anchor sits inside the first cell. A representation choice, not a change of
+content.
+
+The cost is the finding. From **one** incoming term, the output is 450 terms at
+`d = 4` and 78305 at `d = 6`. Canonical merging -- adding the coefficients of
+identical terms and dropping what cancels, the only geometry-free merge
+available -- recovers 4.3x to 4.5x, and nothing at all in one case. So the
+question `\ref{prop:complexity}` leaves open resolves the unhelpful way: the
+signed sum does not collapse to a constant number in any useful sense, and
+`C_d` compounds across generations. The report's remark that the constants "can
+be large if the generic label enumeration is implemented literally" is right and
+understated; its advice to keep a specialized base case is a requirement, not a
+convenience.
+
+## Finding 10 — the oracle has to be grid-aligned in values, not just breakpoints
 
 Not a report defect; a methodology note that cost real time twice across the two
 sprints. The oracle evaluates one representative per cell, which is exact only
@@ -223,18 +279,23 @@ because it makes the general argument rest on the simpler lemma.
 
 ## What would close the rest
 
-1. Handle the valley case by splitting a two-run feasible set into two signed
-   terms. Routine; not implemented. This is the `p >= 9` ceiling.
-2. Phase 5: compression in the `2d` variables of the general compression
-   integrand, which is what `d = 6` and `d = 8` actually need (`p = 12`, `16`).
-3. Phase 6: FastHVChan backend behind a `compression_backend` flag.
-4. Multi-generation closure above `d = 4`.
+1. **Multi-generation closure above `d = 4`.** One generation is verified at
+   `d = 6` and the output is structurally ready to feed back in, but a second
+   generation has not been run. With `C_6` around `4 x 10^4` per incoming term,
+   this is the measurement most likely to show where the construction stops
+   being practical.
+2. Compression at `d = 8`, which needs `p = 16`.
+3. A real merge. Canonical merging recovers only ~4.5x; whether a
+   geometry-aware merge does better is the open question that decides whether
+   repeated compression is viable at all.
+4. FastHVChan backend behind a `compression_backend` flag.
 
-Until 2 lands, the honest statement is: **the elimination calculus is validated
-to `p = 8`, which covers the static chain for `d <= 8`; the compression that
-uses it is validated only at `d = 4`.**
+The honest statement is now: **the elimination calculus is validated to
+`p = 12`, the static chain for `d <= 8`, and compression for `d <= 6` -- for a
+single generation.** What is not established is that the state stays bounded
+across generations, and the measured `C_d` is the reason to doubt it.
 
-Of the seven genuine bugs across these sprints, **five were invisible under
+Of the eight genuine bugs across these sprints, **five were invisible under
 Lebesgue and exposed only by magnitude** — every one an endpoint or atom error
 at `0`. That is the strongest practical argument for keeping the magnitude
 oracle in the suite, and an argument for the product-measure framing independent
